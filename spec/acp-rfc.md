@@ -84,16 +84,16 @@ ACP has five layers. Each is independent and replaceable.
 
 Every agent MUST have a Decentralized Identifier (DID) using the `did:web` method.
 
-An agent operated by `wholefoodearth.com` with local name `order-processor`:
+An agent operated by `vodafone.com` with local name `order-processor`:
 
 ```
-did:web:agents.wholefoodearth.com:order-processor
+did:web:agents.vodafone.com:order-processor
 ```
 
 This resolves to:
 
 ```
-GET https://agents.wholefoodearth.com/order-processor/did.json
+GET https://agents.vodafone.com/order-processor/did.json
 ```
 
 ### 4.2 DID Document
@@ -103,11 +103,11 @@ The DID document MUST contain:
 ```json
 {
   "@context": "https://www.w3.org/ns/did/v1",
-  "id": "did:web:agents.wholefoodearth.com:order-processor",
+  "id": "did:web:agents.vodafone.com:order-processor",
   "verificationMethod": [{
-    "id": "did:web:agents.wholefoodearth.com:order-processor#key-1",
+    "id": "did:web:agents.vodafone.com:order-processor#key-1",
     "type": "Ed25519VerificationKey2020",
-    "controller": "did:web:agents.wholefoodearth.com:order-processor",
+    "controller": "did:web:agents.vodafone.com:order-processor",
     "publicKeyMultibase": "z6Mkf5rGMoatrSj1f…"
   }],
   "authentication": ["#key-1"],
@@ -115,14 +115,14 @@ The DID document MUST contain:
   "keyAgreement": [{
     "id": "#key-agree-1",
     "type": "X25519KeyAgreementKey2020",
-    "controller": "did:web:agents.wholefoodearth.com:order-processor",
+    "controller": "did:web:agents.vodafone.com:order-processor",
     "publicKeyMultibase": "z6LSbysY2xFMR…"
   }],
   "service": [
     {
       "id": "#acp",
       "type": "AgentCommunicationProtocol",
-      "serviceEndpoint": "https://agents.wholefoodearth.com/order-processor/inbox"
+      "serviceEndpoint": "https://agents.vodafone.com/order-processor/inbox"
     },
     {
       "id": "#relay",
@@ -179,14 +179,14 @@ Receivers that see a valid rotation proof MUST update their pin.
 Agents are addressed as:
 
 ```
-order-processor@agents.wholefoodearth.com
+order-processor@agents.vodafone.com
 ```
 
 This is sugar. The canonical form is the DID. The `agent@domain` form is for humans and for DNS-based routing. Implementations MUST resolve `agent@domain` to its DID before processing.
 
 Resolution:
 
-1. Query DNS for `_acp._tcp.agents.wholefoodearth.com` SRV record → host + port
+1. Query DNS for `_acp._tcp.agents.vodafone.com` SRV record → host + port
 2. Fetch Agent Card at `https://{host}/.well-known/acp/order-processor.json`
 3. Agent Card contains the DID → fetch DID document → get inbox URL
 
@@ -201,17 +201,17 @@ IP addresses are not valid in addresses. `did:web` requires a domain.
 Domain operators MUST publish a DNS SRV record:
 
 ```
-_acp._tcp.agents.wholefoodearth.com. 300 IN SRV 10 100 443 acp.wholefoodearth.com.
+_acp._tcp.agents.vodafone.com. 300 IN SRV 10 100 443 acp.vodafone.com.
 ```
 
-This declares: "ACP agents for this domain are reachable at `acp.wholefoodearth.com` on port 443, with priority 10 and weight 100."
+This declares: "ACP agents for this domain are reachable at `acp.vodafone.com` on port 443, with priority 10 and weight 100."
 
 Multiple SRV records enable failover, load balancing, and relay fallback (Section 6).
 
 A DNS TXT record MAY advertise the protocol version:
 
 ```
-_acp.agents.wholefoodearth.com. 3600 IN TXT "v=acp1"
+_acp.agents.vodafone.com. 3600 IN TXT "v=acp1"
 ```
 
 ### 5.2 Agent Card Layer
@@ -219,13 +219,13 @@ _acp.agents.wholefoodearth.com. 3600 IN TXT "v=acp1"
 Each agent MUST publish an Agent Card at a well-known URL:
 
 ```
-GET https://agents.wholefoodearth.com/.well-known/acp/{agent-name}.json
+GET https://agents.vodafone.com/.well-known/acp/{agent-name}.json
 ```
 
 A domain-level index MUST be published at:
 
 ```
-GET https://agents.wholefoodearth.com/.well-known/acp/index.json
+GET https://agents.vodafone.com/.well-known/acp/index.json
 ```
 
 The index supports cursor-based pagination:
@@ -236,13 +236,13 @@ GET /.well-known/acp/index.json?cursor=eyJuIjoxMDB9&limit=100
 
 ```json
 {
-  "domain": "agents.wholefoodearth.com",
+  "domain": "agents.vodafone.com",
   "protocol": "acp/1.0",
   "agents": [
     {
       "name": "order-processor",
       "url": "/.well-known/acp/order-processor.json",
-      "summary": "Processes purchase orders for organic food products"
+      "summary": "Processes mobile phone contract orders"
     }
   ],
   "pagination": {
@@ -292,9 +292,9 @@ Domain operators advertise relays via SRV records with lower priority (higher nu
 
 ```
 ; Primary: direct to agent server
-_acp._tcp.agents.wholefoodearth.com. 300 IN SRV 10 100 443 acp.wholefoodearth.com.
+_acp._tcp.agents.vodafone.com. 300 IN SRV 10 100 443 acp.vodafone.com.
 ; Fallback: relay for store-and-forward
-_acp._tcp.agents.wholefoodearth.com. 300 IN SRV 20 100 443 relay.acprelay.net.
+_acp._tcp.agents.vodafone.com. 300 IN SRV 20 100 443 relay.acprelay.net.
 ```
 
 Senders MUST attempt SRV records in priority order. If the primary responds with 2xx, delivery is complete. If the primary is unreachable or returns 503, the sender MUST try the next SRV record (the relay).
@@ -351,24 +351,24 @@ The Agent Card is the core capability advertisement.
 {
   "acp": "1.0",
   "name": "order-processor",
-  "did": "did:web:agents.wholefoodearth.com:order-processor",
-  "inbox": "https://agents.wholefoodearth.com/order-processor/inbox",
+  "did": "did:web:agents.vodafone.com:order-processor",
+  "inbox": "https://agents.vodafone.com/order-processor/inbox",
   "publicKey": "z6Mkf5rGMoatrSj1f…",
 
-  "description": "Processes purchase orders for organic whole food products. Handles orders with up to 500 line items. Supports UK and EU delivery.",
+  "description": "Processes mobile phone contract orders. Handles new activations, upgrades, and SIM-only plans. Supports UK and EU markets.",
 
   "capabilities": [
     {
       "name": "process-order",
-      "description": "Submit a purchase order for processing. Returns order confirmation with estimated delivery.",
-      "schema": "https://agents.wholefoodearth.com/schemas/order-request.json",
-      "responseSchema": "https://agents.wholefoodearth.com/schemas/order-response.json"
+      "description": "Submit a new phone contract order. Returns contract confirmation with activation date.",
+      "schema": "https://agents.vodafone.com/schemas/order-request.json",
+      "responseSchema": "https://agents.vodafone.com/schemas/order-response.json"
     },
     {
       "name": "check-availability",
-      "description": "Check real-time stock availability for one or more products by SKU.",
-      "schema": "https://agents.wholefoodearth.com/schemas/availability-request.json",
-      "responseSchema": "https://agents.wholefoodearth.com/schemas/availability-response.json"
+      "description": "Check real-time plan availability and pricing by plan ID.",
+      "schema": "https://agents.vodafone.com/schemas/availability-request.json",
+      "responseSchema": "https://agents.vodafone.com/schemas/availability-response.json"
     }
   ],
 
@@ -383,7 +383,7 @@ The Agent Card is the core capability advertisement.
   "reputation": {
     "completions": 847,
     "since": "2026-01-15T00:00:00Z",
-    "verifyUrl": "https://agents.wholefoodearth.com/order-processor/completions"
+    "verifyUrl": "https://agents.vodafone.com/order-processor/completions"
   },
 
   "rateLimit": {
@@ -391,7 +391,7 @@ The Agent Card is the core capability advertisement.
     "window": "60s"
   },
 
-  "contact": "ops@wholefoodearth.com"
+  "contact": "ops@vodafone.com"
 }
 ```
 
@@ -438,16 +438,16 @@ Every ACP message is a signed JSON object:
   "acp": "1.0",
   "id": "msg_01HZ3K9V7N…",
   "type": "request",
-  "from": "did:web:agents.buyer.com:purchasing",
-  "to": "did:web:agents.wholefoodearth.com:order-processor",
+  "from": "did:web:agents.britishairways.com:travel-booking",
+  "to": "did:web:agents.vodafone.com:order-processor",
   "capability": "process-order",
   "correlationId": "task_01HZ3K9V7N…",
   "createdAt": "2026-04-11T14:30:00Z",
   "expiresAt": "2026-04-11T15:30:00Z",
   "body": {
     "items": [
-      {"sku": "WFE-OAT-1KG", "quantity": 50},
-      {"sku": "WFE-CHIA-500G", "quantity": 30}
+      {"planId": "VF-UNLIMITED-MAX", "lines": 3},
+      {"planId": "VF-SIM-ONLY-30GB", "lines": 2}
     ],
     "deliveryAddress": { "…": "…" }
   },
@@ -527,14 +527,14 @@ When encrypted, the `body` field is omitted and replaced with `encrypted`:
   "acp": "1.0",
   "id": "msg_01HZ3K9V7N…",
   "type": "request",
-  "from": "did:web:agents.buyer.com:purchasing",
-  "to": "did:web:agents.wholefoodearth.com:order-processor",
+  "from": "did:web:agents.britishairways.com:travel-booking",
+  "to": "did:web:agents.vodafone.com:order-processor",
   "capability": "process-order",
   "correlationId": "task_01HZ3K9V7N…",
   "createdAt": "2026-04-11T14:30:00Z",
   "encrypted": {
     "algorithm": "X25519-XSalsa20-Poly1305",
-    "recipientKey": "did:web:agents.wholefoodearth.com:order-processor#key-agree-1",
+    "recipientKey": "did:web:agents.vodafone.com:order-processor#key-agree-1",
     "ciphertext": "base64url-encoded-encrypted-body…",
     "nonce": "base64url-encoded-nonce…"
   },
@@ -551,7 +551,7 @@ Encryption uses the recipient's X25519 key from the `keyAgreement` section of th
 ### 9.1 Sending a Message
 
 ```
-POST https://agents.wholefoodearth.com/order-processor/inbox
+POST https://agents.vodafone.com/order-processor/inbox
 Content-Type: application/acp+json
 
 {…message…}
@@ -584,7 +584,7 @@ Prefer: respond-async
   "acp": "1.0",
   "type": "acknowledge",
   "correlationId": "task_01HZ3K9V7N…",
-  "statusUrl": "https://agents.wholefoodearth.com/tasks/task_01HZ3K9V7N…",
+  "statusUrl": "https://agents.vodafone.com/tasks/task_01HZ3K9V7N…",
   "callbackSupported": true
 }
 ```
@@ -712,8 +712,8 @@ After a task completes successfully, both agents SHOULD sign a completion record
   "taskId": "task_01HZ3K9V7N…",
   "capability": "process-order",
   "agents": {
-    "requester": "did:web:agents.buyer.com:purchasing",
-    "provider": "did:web:agents.wholefoodearth.com:order-processor"
+    "requester": "did:web:agents.britishairways.com:travel-booking",
+    "provider": "did:web:agents.vodafone.com:order-processor"
   },
   "completedAt": "2026-04-11T15:00:00Z",
   "contentHash": "sha256:9f86d08…",
@@ -750,7 +750,7 @@ Agents SHOULD publish their completion stats in the Agent Card:
   "reputation": {
     "completions": 847,
     "since": "2026-01-15T00:00:00Z",
-    "verifyUrl": "https://agents.wholefoodearth.com/order-processor/completions"
+    "verifyUrl": "https://agents.vodafone.com/order-processor/completions"
   }
 }
 ```
@@ -825,7 +825,7 @@ Before starting work, agents MAY exchange `negotiate` messages to agree on terms
     "terms": {
       "maxResponseTime": "30s",
       "maxItems": 500,
-      "schemaVersion": "https://agents.wholefoodearth.com/schemas/order-request.json"
+      "schemaVersion": "https://agents.vodafone.com/schemas/order-request.json"
     }
   }
 }
@@ -911,15 +911,15 @@ Extensions are opt-in. An agent that doesn't understand an extension ignores it.
 A complete first interaction between two agents that have never met:
 
 ```
-1. Agent A wants "order processing" and knows the domain wholefoodearth.com
+1. Agent A wants "order processing" and knows the domain vodafone.com
 
 2. DISCOVER
-   DNS: _acp._tcp.agents.wholefoodearth.com → SRV → acp.wholefoodearth.com:443
-   HTTP: GET https://acp.wholefoodearth.com/.well-known/acp/order-processor.json
+   DNS: _acp._tcp.agents.vodafone.com → SRV → acp.vodafone.com:443
+   HTTP: GET https://acp.vodafone.com/.well-known/acp/order-processor.json
    → Agent Card (capabilities, DID, public key, inbox URL, schemas)
 
 3. VERIFY IDENTITY
-   HTTP: GET https://agents.wholefoodearth.com/order-processor/did.json
+   HTTP: GET https://agents.vodafone.com/order-processor/did.json
    → DID document (public key, inbox endpoint)
    → Pin the public key (first contact — TOFU)
 

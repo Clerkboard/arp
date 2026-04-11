@@ -230,11 +230,11 @@ HTTP won because it works everywhere. Any language with sockets can speak it. It
 
 **Core idea worth keeping: Hierarchical naming with delegated authority, typed extensible records, and TTL-based caching.**
 
-DNS is a hierarchical, distributed, eventually-consistent database that maps names to records. It works because of the delegation model: the root servers know who handles `.com`, Verisign knows who handles `wholefoodearth.com`, and you know what's in your zone. No single entity manages the whole database. Adding a subdomain requires no upstream coordination.
+DNS is a hierarchical, distributed, eventually-consistent database that maps names to records. It works because of the delegation model: the root servers know who handles `.com`, Verisign knows who handles `vodafone.com`, and you know what's in your zone. No single entity manages the whole database. Adding a subdomain requires no upstream coordination.
 
 **What works:**
 
-1. **Hierarchical delegation.** `agent.wholefoodearth.com` proves organizational ownership through the DNS delegation chain. The domain owner controls their agent namespace. No central agent registry needed. This gives you uniqueness, verifiability, and stability for free, using infrastructure that already exists.
+1. **Hierarchical delegation.** `agent.vodafone.com` proves organizational ownership through the DNS delegation chain. The domain owner controls their agent namespace. No central agent registry needed. This gives you uniqueness, verifiability, and stability for free, using infrastructure that already exists.
 
 2. **Typed, extensible records.** A records for addresses. MX records for mail routing. SRV records for service location. TXT records for arbitrary metadata. New capabilities are added by defining new record types (or abusing TXT records), without changing the protocol. Agents could use purpose-built record types: `AGENT` records for capability advertisement, or SRV-style records for `_agent._tcp.domain.com`.
 
@@ -266,7 +266,7 @@ Six things. Everything else is a feature built on top.
 
 An agent needs a stable, portable, cryptographically verifiable identity that survives server changes, framework migrations, and provider switches.
 
-The best model: DID-based identity (from AT Protocol) anchored to DNS (from email). `did:web:agents.wholefoodearth.com:order-processor` resolves by fetching `https://agents.wholefoodearth.com/.well-known/did.json`. The DID document contains:
+The best model: DID-based identity (from AT Protocol) anchored to DNS (from email). `did:web:agents.vodafone.com:order-processor` resolves by fetching `https://agents.vodafone.com/.well-known/did.json`. The DID document contains:
 - The agent's signing key (proves messages came from this agent)
 - Rotation keys (recovers from key compromise)
 - The agent's current endpoint
@@ -277,19 +277,19 @@ The domain provides organizational affiliation and trust context. The DID provid
 
 Three layers, from stable to dynamic:
 
-- **DNS layer** (stable, cached): SRV-style records for agent endpoints. `_agent._tcp.wholefoodearth.com` returns the host and port where agents for this domain can be reached. TTL-based caching. Changes propagate in minutes.
+- **DNS layer** (stable, cached): SRV-style records for agent endpoints. `_agent._tcp.vodafone.com` returns the host and port where agents for this domain can be reached. TTL-based caching. Changes propagate in minutes.
 - **Agent Card layer** (semi-stable, HTTP-cached): JSON capability document at `/.well-known/agent.json` (from A2A). Describes what the agent can do, what schemas it accepts, authentication requirements. HTTP cache headers control freshness. Changes propagate in seconds.
 - **Runtime negotiation layer** (dynamic, per-session): Capability exchange during session initialization (from MCP). The two agents agree on protocol version, supported message types, context limits, and interaction mode. Happens once per relationship, refreshed as needed.
 
 For local/organizational discovery: mDNS-style announcement. An agent starts, broadcasts its capabilities, peers discover it without a registry.
 
-For open internet discovery: this is the unsolved problem. No protocol has cracked "find me an agent I've never heard of that can do X." DNS can tell you "wholefoodearth.com has agents." It can't tell you "who on the internet can process purchase orders?" That requires either a registry (centralization) or a gossip protocol (complexity). This is an open research question.
+For open internet discovery: this is the unsolved problem. No protocol has cracked "find me an agent I've never heard of that can do X." DNS can tell you "vodafone.com has agents." It can't tell you "who on the internet can process purchase orders?" That requires either a registry (centralization) or a gossip protocol (complexity). This is an open research question.
 
 **3. Addressing**
 
 The `agent@domain` model (from email) with modern routing:
 
-- `order-processor@agents.wholefoodearth.com` — identifies a specific agent (or class of agents) at a domain
+- `order-processor@agents.vodafone.com` — identifies a specific agent (or class of agents) at a domain
 - The domain resolves via DNS to an endpoint
 - The local part is opaque to the network — the domain operator decides what it means
 - Messages are delivered to the agent's inbox (from ActivityPub)
@@ -312,8 +312,8 @@ The inbox/outbox model (from ActivityPub) over HTTP (for universality):
 
 The dual-layer model (from MCP) with namespaced schemas (from AT Protocol):
 
-- **Semantic layer**: Natural language description of what the agent can do. "I process purchase orders for organic food products. I can handle orders with up to 500 line items. I respond within 30 seconds."
-- **Schema layer**: Formal schema defining input/output types, constraints, and validation rules. Using namespaced types: `com.wholefoodearth.agent.order.request`, `com.wholefoodearth.agent.order.response`.
+- **Semantic layer**: Natural language description of what the agent can do. "I process mobile phone contract orders. I handle new activations, upgrades, and SIM-only plans. I respond within 30 seconds."
+- **Schema layer**: Formal schema defining input/output types, constraints, and validation rules. Using namespaced types: `com.vodafone.agent.order.request`, `com.vodafone.agent.order.response`.
 - **Metadata**: Cost per interaction, rate limits, availability hours, geographic constraints, required authentication level, data handling policies.
 
 Published in the Agent Card (semi-stable) and refined during runtime negotiation (dynamic).
