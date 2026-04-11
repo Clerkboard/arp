@@ -4,7 +4,7 @@
 
 ```
 Status:     Draft
-Version:    0.2
+Version:    0.3
 Authors:    Tiago Pita
 ```
 
@@ -84,16 +84,16 @@ ACP has five layers. Each is independent and replaceable.
 
 Every agent MUST have a Decentralized Identifier (DID) using the `did:web` method.
 
-An agent operated by `vodafone.com` with local name `order-processor`:
+An agent operated by `google.com` with local name `order-processor`:
 
 ```
-did:web:agents.vodafone.com:order-processor
+did:web:agents.google.com:order-processor
 ```
 
 This resolves to:
 
 ```
-GET https://agents.vodafone.com/order-processor/did.json
+GET https://agents.google.com/order-processor/did.json
 ```
 
 ### 4.2 DID Document
@@ -103,11 +103,11 @@ The DID document MUST contain:
 ```json
 {
   "@context": "https://www.w3.org/ns/did/v1",
-  "id": "did:web:agents.vodafone.com:order-processor",
+  "id": "did:web:agents.google.com:order-processor",
   "verificationMethod": [{
-    "id": "did:web:agents.vodafone.com:order-processor#key-1",
+    "id": "did:web:agents.google.com:order-processor#key-1",
     "type": "Ed25519VerificationKey2020",
-    "controller": "did:web:agents.vodafone.com:order-processor",
+    "controller": "did:web:agents.google.com:order-processor",
     "publicKeyMultibase": "z6Mkf5rGMoatrSj1f…"
   }],
   "authentication": ["#key-1"],
@@ -115,14 +115,14 @@ The DID document MUST contain:
   "keyAgreement": [{
     "id": "#key-agree-1",
     "type": "X25519KeyAgreementKey2020",
-    "controller": "did:web:agents.vodafone.com:order-processor",
+    "controller": "did:web:agents.google.com:order-processor",
     "publicKeyMultibase": "z6LSbysY2xFMR…"
   }],
   "service": [
     {
       "id": "#acp",
       "type": "AgentCommunicationProtocol",
-      "serviceEndpoint": "https://agents.vodafone.com/order-processor/inbox"
+      "serviceEndpoint": "https://agents.google.com/order-processor/inbox"
     },
     {
       "id": "#relay",
@@ -168,6 +168,27 @@ Implementations MUST store pinned keys persistently. The storage format is imple
 
 Receivers that see a valid rotation proof MUST update their pin.
 
+**Key recovery:** If the old key is lost or compromised and cannot sign a rotation proof, the agent MUST use domain-based recovery:
+
+1. Publish a recovery record at `https://{domain}/.well-known/acp/recovery/{name}.json`:
+
+```json
+{
+  "did": "did:web:agents.google.com:order-processor",
+  "compromisedKey": "z6Mkf5rGMoatrSj1f…",
+  "newKey": "z6MkqR8u2vXx9p…",
+  "reason": "key_lost",
+  "recoveredAt": "2026-04-12T09:00:00Z"
+}
+```
+
+2. Update the DID document with the new key.
+3. The recovery record MUST remain published for at least 30 days.
+
+Receivers that encounter a key mismatch SHOULD check for a recovery record before permanently rejecting the agent. If a valid recovery record exists, the receiver MAY accept the new key after a **grace period of 72 hours** from `recoveredAt` — during which the receiver SHOULD accept messages signed by either the old pinned key or the new key. After the grace period, the receiver MUST update its pin to the new key.
+
+**Rotation notification:** When an agent rotates or recovers a key, it SHOULD send a signed `negotiate` message (using the new key) to all agents in its pin store, with `body.keyRotation: true`. This allows contacts to proactively verify and update their pins rather than discovering the change on next interaction.
+
 ### 4.4 Hard Choices on Identity
 
 - **`did:web` only.** Not `did:plc`, not `did:key`, not `did:ion`. `did:web` uses existing HTTPS infrastructure. It ties identity to domain ownership, which provides organizational trust context. Key pinning (Section 4.3) mitigates the DNS availability risk.
@@ -179,14 +200,14 @@ Receivers that see a valid rotation proof MUST update their pin.
 Agents are addressed as:
 
 ```
-order-processor@agents.vodafone.com
+order-processor@agents.google.com
 ```
 
 This is sugar. The canonical form is the DID. The `agent@domain` form is for humans and for DNS-based routing. Implementations MUST resolve `agent@domain` to its DID before processing.
 
 Resolution:
 
-1. Query DNS for `_acp._tcp.agents.vodafone.com` SRV record → host + port
+1. Query DNS for `_acp._tcp.agents.google.com` SRV record → host + port
 2. Fetch Agent Card at `https://{host}/.well-known/acp/order-processor.json`
 3. Agent Card contains the DID → fetch DID document → get inbox URL
 
@@ -201,17 +222,17 @@ IP addresses are not valid in addresses. `did:web` requires a domain.
 Domain operators MUST publish a DNS SRV record:
 
 ```
-_acp._tcp.agents.vodafone.com. 300 IN SRV 10 100 443 acp.vodafone.com.
+_acp._tcp.agents.google.com. 300 IN SRV 10 100 443 acp.google.com.
 ```
 
-This declares: "ACP agents for this domain are reachable at `acp.vodafone.com` on port 443, with priority 10 and weight 100."
+This declares: "ACP agents for this domain are reachable at `acp.google.com` on port 443, with priority 10 and weight 100."
 
 Multiple SRV records enable failover, load balancing, and relay fallback (Section 6).
 
 A DNS TXT record MAY advertise the protocol version:
 
 ```
-_acp.agents.vodafone.com. 3600 IN TXT "v=acp1"
+_acp.agents.google.com. 3600 IN TXT "v=acp1"
 ```
 
 ### 5.2 Agent Card Layer
@@ -219,13 +240,13 @@ _acp.agents.vodafone.com. 3600 IN TXT "v=acp1"
 Each agent MUST publish an Agent Card at a well-known URL:
 
 ```
-GET https://agents.vodafone.com/.well-known/acp/{agent-name}.json
+GET https://agents.google.com/.well-known/acp/{agent-name}.json
 ```
 
 A domain-level index MUST be published at:
 
 ```
-GET https://agents.vodafone.com/.well-known/acp/index.json
+GET https://agents.google.com/.well-known/acp/index.json
 ```
 
 The index supports cursor-based pagination:
@@ -236,13 +257,13 @@ GET /.well-known/acp/index.json?cursor=eyJuIjoxMDB9&limit=100
 
 ```json
 {
-  "domain": "agents.vodafone.com",
+  "domain": "agents.google.com",
   "protocol": "acp/1.0",
   "agents": [
     {
       "name": "order-processor",
       "url": "/.well-known/acp/order-processor.json",
-      "summary": "Processes mobile phone contract orders"
+      "summary": "Processes purchase orders for cloud infrastructure"
     }
   ],
   "pagination": {
@@ -259,9 +280,43 @@ HTTP `Cache-Control` headers dictate freshness. Domain operators set TTLs approp
 
 ### 5.3 Open Discovery
 
-ACP does not define a global search protocol. This is deliberate.
+ACP does not define a global search protocol. This is deliberate. But it provides concrete mechanisms for decentralised discovery.
 
-The Agent Card index is crawlable. Search engines, directories, and aggregators can index these — the same way web search engines index `sitemap.xml`. The protocol provides the crawlable surface. The discovery ecosystem builds on top.
+**Domain hint file.** Domain operators SHOULD publish an `agents.txt` file at the domain root:
+
+```
+GET https://google.com/agents.txt
+```
+
+```
+# ACP agents for this domain
+acp-index: https://agents.google.com/.well-known/acp/index.json
+```
+
+This is analogous to `robots.txt` — a single, predictable file that crawlers check first. It allows a root domain to point to the subdomain where agents live.
+
+**Peer exchange.** Agent Cards MAY include a `peers` field listing domains the agent has successfully interacted with:
+
+```json
+{
+  "peers": ["agents.partner-co.com", "agents.logistics-provider.net"]
+}
+```
+
+Peers are informational, not endorsements. Crawlers can follow peer links to discover additional ACP domains — similar to blogroll-based web discovery. Agents SHOULD only list peers with at least one verified completion record (Section 11).
+
+**Category tags.** Entries in the Agent Card index SHOULD include a `tags` array for discoverability:
+
+```json
+{
+  "name": "order-processor",
+  "url": "/.well-known/acp/order-processor.json",
+  "summary": "Processes purchase orders for cloud infrastructure",
+  "tags": ["e-commerce", "orders", "food"]
+}
+```
+
+Tags are free-form strings. The protocol does not define a controlled vocabulary — taxonomies will emerge from the ecosystem, as they did for web content.
 
 ---
 
@@ -292,9 +347,9 @@ Domain operators advertise relays via SRV records with lower priority (higher nu
 
 ```
 ; Primary: direct to agent server
-_acp._tcp.agents.vodafone.com. 300 IN SRV 10 100 443 acp.vodafone.com.
+_acp._tcp.agents.google.com. 300 IN SRV 10 100 443 acp.google.com.
 ; Fallback: relay for store-and-forward
-_acp._tcp.agents.vodafone.com. 300 IN SRV 20 100 443 relay.acprelay.net.
+_acp._tcp.agents.google.com. 300 IN SRV 20 100 443 relay.acprelay.net.
 ```
 
 Senders MUST attempt SRV records in priority order. If the primary responds with 2xx, delivery is complete. If the primary is unreachable or returns 503, the sender MUST try the next SRV record (the relay).
@@ -351,24 +406,24 @@ The Agent Card is the core capability advertisement.
 {
   "acp": "1.0",
   "name": "order-processor",
-  "did": "did:web:agents.vodafone.com:order-processor",
-  "inbox": "https://agents.vodafone.com/order-processor/inbox",
+  "did": "did:web:agents.google.com:order-processor",
+  "inbox": "https://agents.google.com/order-processor/inbox",
   "publicKey": "z6Mkf5rGMoatrSj1f…",
 
-  "description": "Processes mobile phone contract orders. Handles new activations, upgrades, and SIM-only plans. Supports UK and EU markets.",
+  "description": "Processes purchase orders for cloud infrastructure. Handles orders with up to 500 line items. Supports all GCP regions.",
 
   "capabilities": [
     {
       "name": "process-order",
-      "description": "Submit a new phone contract order. Returns contract confirmation with activation date.",
-      "schema": "https://agents.vodafone.com/schemas/order-request.json",
-      "responseSchema": "https://agents.vodafone.com/schemas/order-response.json"
+      "description": "Submit a purchase order for processing. Returns order confirmation with estimated delivery.",
+      "schema": "https://agents.google.com/schemas/order-request.json",
+      "responseSchema": "https://agents.google.com/schemas/order-response.json"
     },
     {
       "name": "check-availability",
-      "description": "Check real-time plan availability and pricing by plan ID.",
-      "schema": "https://agents.vodafone.com/schemas/availability-request.json",
-      "responseSchema": "https://agents.vodafone.com/schemas/availability-response.json"
+      "description": "Check real-time stock availability for one or more products by SKU.",
+      "schema": "https://agents.google.com/schemas/availability-request.json",
+      "responseSchema": "https://agents.google.com/schemas/availability-response.json"
     }
   ],
 
@@ -383,7 +438,7 @@ The Agent Card is the core capability advertisement.
   "reputation": {
     "completions": 847,
     "since": "2026-01-15T00:00:00Z",
-    "verifyUrl": "https://agents.vodafone.com/order-processor/completions"
+    "verifyUrl": "https://agents.google.com/order-processor/completions"
   },
 
   "rateLimit": {
@@ -391,7 +446,7 @@ The Agent Card is the core capability advertisement.
     "window": "60s"
   },
 
-  "contact": "ops@vodafone.com"
+  "contact": "ops@google.com"
 }
 ```
 
@@ -438,16 +493,16 @@ Every ACP message is a signed JSON object:
   "acp": "1.0",
   "id": "msg_01HZ3K9V7N…",
   "type": "request",
-  "from": "did:web:agents.britishairways.com:travel-booking",
-  "to": "did:web:agents.vodafone.com:order-processor",
+  "from": "did:web:agents.united.com:purchasing",
+  "to": "did:web:agents.google.com:order-processor",
   "capability": "process-order",
   "correlationId": "task_01HZ3K9V7N…",
   "createdAt": "2026-04-11T14:30:00Z",
   "expiresAt": "2026-04-11T15:30:00Z",
   "body": {
     "items": [
-      {"planId": "VF-UNLIMITED-MAX", "lines": 3},
-      {"planId": "VF-SIM-ONLY-30GB", "lines": 2}
+      {"sku": "GCP-VM-N2D", "quantity": 50},
+      {"sku": "GCP-SSD-500G", "quantity": 30}
     ],
     "deliveryAddress": { "…": "…" }
   },
@@ -493,7 +548,27 @@ No `Follow`, no `Like`, no `Announce`. These eight verbs cover task delegation, 
 
 The message body MUST NOT exceed 1 MB (1,048,576 bytes) when serialized as JSON. Receivers MUST reject messages exceeding this limit with `413 Payload Too Large`.
 
-For payloads larger than 1 MB, the body SHOULD contain a URL reference to the content.
+For payloads larger than 1 MB, the body SHOULD reference external content using a `contentRef` object:
+
+```json
+{
+  "contentRef": {
+    "url": "https://storage.example.com/files/dataset-9f86d08.json",
+    "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+    "size": 5242880,
+    "mediaType": "application/json"
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `url` | string | MUST | HTTPS URL where the content can be fetched |
+| `sha256` | string | MUST | SHA-256 hex digest of the raw content bytes |
+| `size` | integer | MUST | Content size in bytes |
+| `mediaType` | string | SHOULD | MIME type of the referenced content |
+
+The `contentRef` object MAY appear anywhere within `body`. Because the hash is inside the signed message envelope, receivers can fetch the external content and verify its integrity independently of transport. Receivers MUST reject fetched content whose SHA-256 digest does not match. The `url` MUST use HTTPS and MUST NOT resolve to a private or reserved IP range (same rules as callback URLs, Section 9.3).
 
 ### 8.5 Correlation
 
@@ -516,6 +591,14 @@ Receivers MUST:
 
 No unsigned messages. No exceptions.
 
+**Implementer's note on JCS.** JSON Canonicalization (RFC 8785) has cross-language pitfalls that break signature interoperability if not handled correctly:
+
+- **Float serialisation.** JCS requires IEEE 754 double-precision formatting. Languages differ: Python's `json.dumps` and JavaScript's `JSON.stringify` produce different output for values like `1e20` vs `100000000000000000000`. ACP messages use strings for timestamps and identifiers, but capability schemas may include numeric fields. Implementations MUST use a JCS-compliant serialiser for signing, not a general-purpose `JSON.stringify` with sorted keys.
+- **Unicode.** JCS requires no unnecessary escaping — characters above U+001F are output literally in UTF-8, not as `\uXXXX` escapes. Some JSON libraries escape non-ASCII by default.
+- **Key ordering.** JCS sorts keys by UTF-16 code unit order, which differs from naive Unicode codepoint sort for characters outside the BMP.
+
+Implementations MUST pass the reference test vectors in Appendix D to confirm JCS correctness.
+
 ### 8.7 Content Encryption
 
 For sensitive payloads, senders MAY encrypt the message body to the recipient's public key.
@@ -527,14 +610,14 @@ When encrypted, the `body` field is omitted and replaced with `encrypted`:
   "acp": "1.0",
   "id": "msg_01HZ3K9V7N…",
   "type": "request",
-  "from": "did:web:agents.britishairways.com:travel-booking",
-  "to": "did:web:agents.vodafone.com:order-processor",
+  "from": "did:web:agents.united.com:purchasing",
+  "to": "did:web:agents.google.com:order-processor",
   "capability": "process-order",
   "correlationId": "task_01HZ3K9V7N…",
   "createdAt": "2026-04-11T14:30:00Z",
   "encrypted": {
     "algorithm": "X25519-XSalsa20-Poly1305",
-    "recipientKey": "did:web:agents.vodafone.com:order-processor#key-agree-1",
+    "recipientKey": "did:web:agents.google.com:order-processor#key-agree-1",
     "ciphertext": "base64url-encoded-encrypted-body…",
     "nonce": "base64url-encoded-nonce…"
   },
@@ -551,7 +634,7 @@ Encryption uses the recipient's X25519 key from the `keyAgreement` section of th
 ### 9.1 Sending a Message
 
 ```
-POST https://agents.vodafone.com/order-processor/inbox
+POST https://agents.google.com/order-processor/inbox
 Content-Type: application/acp+json
 
 {…message…}
@@ -584,7 +667,7 @@ Prefer: respond-async
   "acp": "1.0",
   "type": "acknowledge",
   "correlationId": "task_01HZ3K9V7N…",
-  "statusUrl": "https://agents.vodafone.com/tasks/task_01HZ3K9V7N…",
+  "statusUrl": "https://agents.google.com/tasks/task_01HZ3K9V7N…",
   "callbackSupported": true
 }
 ```
@@ -712,8 +795,8 @@ After a task completes successfully, both agents SHOULD sign a completion record
   "taskId": "task_01HZ3K9V7N…",
   "capability": "process-order",
   "agents": {
-    "requester": "did:web:agents.britishairways.com:travel-booking",
-    "provider": "did:web:agents.vodafone.com:order-processor"
+    "requester": "did:web:agents.united.com:purchasing",
+    "provider": "did:web:agents.google.com:order-processor"
   },
   "completedAt": "2026-04-11T15:00:00Z",
   "contentHash": "sha256:9f86d08…",
@@ -750,7 +833,7 @@ Agents SHOULD publish their completion stats in the Agent Card:
   "reputation": {
     "completions": 847,
     "since": "2026-01-15T00:00:00Z",
-    "verifyUrl": "https://agents.vodafone.com/order-processor/completions"
+    "verifyUrl": "https://agents.google.com/order-processor/completions"
   }
 }
 ```
@@ -769,16 +852,16 @@ ACP does not define a reputation aggregator or scoring service. Completion recor
 
 A platform is a service that hosts agents on behalf of multiple users (tenants). A user signs up, gets a handle, and their agents run under the platform's domain.
 
-Example: Tiago signs up on Clerkboard and gets:
+Example: Alice signs up on AgentCloud and gets:
 
 ```
-my-agent@tiago.agents.clerkboard.com
+my-agent@alice.agents.agentcloud.com
 ```
 
 DID:
 
 ```
-did:web:tiago.agents.clerkboard.com:my-agent
+did:web:alice.agents.agentcloud.com:my-agent
 ```
 
 ### 12.2 Addressing
@@ -809,7 +892,7 @@ Platforms SHOULD:
 
 ### 12.4 Platform Agent
 
-A platform MAY publish its own agent at `did:web:agents.clerkboard.com:platform` to serve as a directory for the platform's tenants and handle platform-level operations.
+A platform MAY publish its own agent at `did:web:agents.agentcloud.com:platform` to serve as a directory for the platform's tenants and handle platform-level operations.
 
 ---
 
@@ -825,7 +908,7 @@ Before starting work, agents MAY exchange `negotiate` messages to agree on terms
     "terms": {
       "maxResponseTime": "30s",
       "maxItems": 500,
-      "schemaVersion": "https://agents.vodafone.com/schemas/order-request.json"
+      "schemaVersion": "https://agents.google.com/schemas/order-request.json"
     }
   }
 }
@@ -911,15 +994,15 @@ Extensions are opt-in. An agent that doesn't understand an extension ignores it.
 A complete first interaction between two agents that have never met:
 
 ```
-1. Agent A wants "order processing" and knows the domain vodafone.com
+1. Agent A wants "order processing" and knows the domain google.com
 
 2. DISCOVER
-   DNS: _acp._tcp.agents.vodafone.com → SRV → acp.vodafone.com:443
-   HTTP: GET https://acp.vodafone.com/.well-known/acp/order-processor.json
+   DNS: _acp._tcp.agents.google.com → SRV → acp.google.com:443
+   HTTP: GET https://acp.google.com/.well-known/acp/order-processor.json
    → Agent Card (capabilities, DID, public key, inbox URL, schemas)
 
 3. VERIFY IDENTITY
-   HTTP: GET https://agents.vodafone.com/order-processor/did.json
+   HTTP: GET https://agents.google.com/order-processor/did.json
    → DID document (public key, inbox endpoint)
    → Pin the public key (first contact — TOFU)
 
@@ -965,6 +1048,8 @@ If Agent B had been offline at step 5, the sender would have fallen back to the 
 | Message loss | Store-and-forward relays with 72-hour minimum retention |
 | Storage exhaustion | Bounded idempotency window (24h–7d) + 1 MB message size limit |
 | Relay abuse | Relay authorization via DID document service listing |
+| Key recovery window exploitation | 72h grace period is time-bound and requires domain proof. Receivers SHOULD increase scrutiny of messages signed with keys that have a pending recovery record |
+| Peers field manipulation | Peers are advisory, not authoritative. Agents SHOULD only list peers backed by verifiable completion records. Consumers of peer data MUST NOT treat peer listings as trust endorsements |
 
 ---
 
@@ -979,7 +1064,9 @@ If Agent B had been offline at step 5, the sender would have fallen back to the 
 5. An inbox endpoint that accepts POST requests
 6. An Agent Card describing your capabilities
 
-That's it. No special infrastructure. No blockchain. No message brokers. A single-file HTTP server can be a compliant ACP agent. Relays are optional but recommended for production.
+That's it. No special infrastructure. No blockchain. No message brokers. Relays are optional but recommended for production.
+
+**A practical note:** While the protocol is simple, a compliant agent requires persistent storage for key pins, message ID tracking, and optionally completion records. An in-memory implementation works for testing but will lose state on restart. A SQLite database or equivalent key-value store is the practical minimum for production.
 
 ### 18.2 Content Type
 
@@ -1039,7 +1126,51 @@ _acp.agents.example.com. 3600 IN TXT "v=acp1"
 |------|---------|
 | `/.well-known/acp/index.json` | Domain agent index (paginated) |
 | `/.well-known/acp/{name}.json` | Individual Agent Card |
+| `/.well-known/acp/recovery/{name}.json` | Key recovery record (Section 4.3) |
 | `/{name}/did.json` | DID document (per did:web spec) |
+| `/agents.txt` | Domain hint file for discovery (Section 5.3) |
+
+## Appendix D: JCS Test Vectors
+
+All ACP implementations MUST produce identical canonical output for these three inputs. The expected output is the canonical form per RFC 8785.
+
+**Vector 1 — Basic message envelope (key ordering):**
+
+Input (keys deliberately unordered):
+```json
+{"type":"request","acp":"1.0","to":"did:web:b.com:agent","id":"msg_001","from":"did:web:a.com:agent","createdAt":"2026-04-12T00:00:00Z","body":{"text":"hello"}}
+```
+
+Expected canonical output:
+```
+{"acp":"1.0","body":{"text":"hello"},"createdAt":"2026-04-12T00:00:00Z","from":"did:web:a.com:agent","id":"msg_001","to":"did:web:b.com:agent","type":"request"}
+```
+
+**Vector 2 — Numeric values and nested objects:**
+
+Input:
+```json
+{"count":1,"rate":0.5,"nested":{"z":true,"a":false},"list":[3,1,2]}
+```
+
+Expected canonical output:
+```
+{"count":1,"list":[3,1,2],"nested":{"a":false,"z":true},"rate":0.5}
+```
+
+**Vector 3 — Unicode and special characters:**
+
+Input:
+```json
+{"emoji":"☕","path":"/données/café","null_val":null,"empty":""}
+```
+
+Expected canonical output:
+```
+{"emoji":"☕","empty":"","null_val":null,"path":"/données/café"}
+```
+
+Note: the Unicode characters MUST appear as literal UTF-8, not as `\uXXXX` escapes. Array element order is preserved (JCS only sorts object keys). Implementations that produce different output for any of these vectors have a JCS bug that will cause signature verification failures.
 
 ---
 
