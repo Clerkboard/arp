@@ -1,15 +1,15 @@
-# Connecting AI Models to ACP
+# Connecting AI Models to ARP
 
-An ACP agent is just an HTTP server that signs messages. The capability handler is where your logic lives — including calling an LLM.
+An ARP agent is just an HTTP server that signs messages. The capability handler is where your logic lives — including calling an LLM.
 
 ## Claude
 
 ```typescript
-import { ACPAgent } from '@acp-protocol/sdk';
+import { ARPAgent } from '@arp-protocol/sdk';
 import Anthropic from '@anthropic-ai/sdk';
 
 const claude = new Anthropic(); // uses ANTHROPIC_API_KEY env var
-const agent = new ACPAgent({ name: 'assistant', domain: 'localhost' });
+const agent = new ARPAgent({ name: 'assistant', domain: 'localhost' });
 
 agent.handle('ask', {
   description: 'Ask a question, get an AI-powered answer',
@@ -32,18 +32,18 @@ agent.listen();
 ```
 
 ```bash
-npm install @acp-protocol/sdk @anthropic-ai/sdk
+npm install @arp-protocol/sdk @anthropic-ai/sdk
 ANTHROPIC_API_KEY=sk-... npm start
 ```
 
 ## OpenAI
 
 ```typescript
-import { ACPAgent } from '@acp-protocol/sdk';
+import { ARPAgent } from '@arp-protocol/sdk';
 import OpenAI from 'openai';
 
 const openai = new OpenAI(); // uses OPENAI_API_KEY env var
-const agent = new ACPAgent({ name: 'assistant', domain: 'localhost' });
+const agent = new ARPAgent({ name: 'assistant', domain: 'localhost' });
 
 agent.handle('ask', {
   description: 'Ask a question, get an AI-powered answer',
@@ -69,7 +69,7 @@ agent.listen();
 A single agent can expose several capabilities backed by the same LLM with different system prompts:
 
 ```typescript
-const agent = new ACPAgent({ name: 'support', domain: 'agents.mycompany.com' });
+const agent = new ARPAgent({ name: 'support', domain: 'agents.mycompany.com' });
 
 agent.handle('answer-question', {
   description: 'Answer customer questions about our products',
@@ -104,7 +104,7 @@ agent.listen();
 
 ## Agent-to-agent with AI reasoning
 
-The real power of ACP: an AI agent that talks to other ACP agents. Agent A receives a request, uses Claude to decide what to do, then calls Agent B over ACP.
+The real power of ARP: an AI agent that talks to other ARP agents. Agent A receives a request, uses Claude to decide what to do, then calls Agent B over ARP.
 
 ```typescript
 agent.handle('fulfill-order', {
@@ -120,7 +120,7 @@ agent.handle('fulfill-order', {
     messages: [{ role: 'user', content: JSON.stringify(msg.body) }],
   });
 
-  // 2. Call the inventory agent over ACP (standard HTTP + signing)
+  // 2. Call the inventory agent over ARP (standard HTTP + signing)
   // Your agent signs and sends a request to the partner's inbox
   // The partner verifies your signature and responds
 
@@ -132,4 +132,4 @@ agent.handle('fulfill-order', {
 });
 ```
 
-The pattern is always the same: receive ACP message, call your AI, return the result. ACP handles the identity, signing, and trust. The AI handles the reasoning.
+The pattern is always the same: receive ARP message, call your AI, return the result. ARP handles the identity, signing, and trust. The AI handles the reasoning.

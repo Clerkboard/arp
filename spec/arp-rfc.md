@@ -1,20 +1,30 @@
-# ACP: Agent Communication Protocol
+# ARP: Agent Relations Protocol
 
 **RFC Draft — April 2026**
 
 ```
 Status:     Draft
-Version:    0.3.1
+Version:    0.4.0
 Authors:    Tiago Pita
 ```
 
 ---
 
+## Changelog
+
+| Version | Date | Change |
+|---------|------|--------|
+| 0.4.0 | 2026-04-12 | Renamed from ACP (Agent Communication Protocol) to ARP (Agent Relations Protocol). No protocol logic changes — purely a naming update. All message envelope fields, content types, well-known paths, and DNS records updated from `acp` to `arp`. |
+| 0.3.1 | 2026-04-12 | Clarify publicKeyMultibase encoding, formalize negotiate body schema |
+| 0.3.0 | 2026-04-11 | Reputation: timing proof + request binding in completion records |
+
+---
+
 ## Abstract
 
-The Agent Communication Protocol (ACP) is a federated messaging protocol for autonomous AI agents on the open internet. It enables agents — regardless of model, framework, or provider — to discover each other, negotiate capabilities, and exchange structured messages.
+The Agent Relations Protocol (ARP) is a federated messaging protocol for autonomous AI agents on the open internet. It enables agents — regardless of model, framework, or provider — to discover each other, negotiate capabilities, and exchange structured messages.
 
-ACP combines DNS-based discovery, DID-based identity, HTTP transport, typed JSON messaging, store-and-forward relays, and verifiable reputation into a protocol simple enough to implement in a weekend and robust enough to operate at scale.
+ARP combines DNS-based discovery, DID-based identity, HTTP transport, typed JSON messaging, store-and-forward relays, and verifiable reputation into a protocol simple enough to implement in a weekend and robust enough to operate at scale.
 
 This document specifies the protocol. It is deliberately opinionated. Where prior work left choices open, this spec makes them.
 
@@ -39,7 +49,7 @@ Eight rules. Every design decision in this spec traces back to one of these.
 
 | Term | Meaning |
 |------|---------|
-| **Agent** | An autonomous software entity that can send and receive ACP messages |
+| **Agent** | An autonomous software entity that can send and receive ARP messages |
 | **Domain Operator** | The entity that controls a DNS domain and runs agents under it |
 | **Platform** | A service that hosts agents on behalf of multiple tenants (Section 12) |
 | **Agent Card** | JSON document describing an agent's identity, capabilities, and endpoint |
@@ -55,7 +65,7 @@ The key words MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY are used as defined in
 
 ## 3. Architecture
 
-ACP has five layers. Each is independent and replaceable.
+ARP has five layers. Each is independent and replaceable.
 
 ```
 ┌─────────────────────────────────┐
@@ -80,7 +90,7 @@ ACP has five layers. Each is independent and replaceable.
 
 ## 4. Identity
 
-### 4.1 ACP Address
+### 4.1 ARP Address
 
 Every agent has a human-readable address in the format:
 
@@ -88,7 +98,7 @@ Every agent has a human-readable address in the format:
 {name}@{domain}
 ```
 
-This is the canonical way to reference an ACP agent — on websites, in documentation, on business cards, or in conversation. It is deliberately modelled on email addresses for familiarity.
+This is the canonical way to reference an ARP agent — on websites, in documentation, on business cards, or in conversation. It is deliberately modelled on email addresses for familiarity.
 
 Examples:
 
@@ -98,17 +108,17 @@ Examples:
 | Google order processor | `order-processor@agents.google.com` |
 | United Airlines purchasing | `purchasing@agents.united.com` |
 
-**Resolution.** An ACP address resolves deterministically to an Agent Card:
+**Resolution.** An ARP address resolves deterministically to an Agent Card:
 
 ```
 support@agents.vodafone.com
-  → https://agents.vodafone.com/.well-known/acp/support.json
+  → https://agents.vodafone.com/.well-known/arp/support.json
 ```
 
 The resolution rule:
 
-1. Optionally, query DNS for `_acp._tcp.{domain}` SRV record to discover the host (allows `agents.vodafone.com` to delegate to a different server)
-2. Fetch the Agent Card at `https://{domain}/.well-known/acp/{name}.json`
+1. Optionally, query DNS for `_arp._tcp.{domain}` SRV record to discover the host (allows `agents.vodafone.com` to delegate to a different server)
+2. Fetch the Agent Card at `https://{domain}/.well-known/arp/{name}.json`
 3. From the Agent Card, obtain the agent's DID, inbox URL, public key, and capabilities
 
 If no SRV record exists, the domain itself serves the Agent Card over HTTPS. IP addresses are not valid in addresses — `did:web` requires a domain.
@@ -129,13 +139,13 @@ This resolves to:
 GET https://agents.google.com/order-processor/did.json
 ```
 
-The ACP address and DID are two representations of the same agent. The address is for people; the DID is for the protocol.
+The ARP address and DID are two representations of the same agent. The address is for people; the DID is for the protocol.
 
 ### 4.3 Cryptographic Encoding and DID Document
 
 ### 4.3.1 Multibase Encoding
 
-ACP uses **multibase** encoding for all public keys and signatures. Multibase is a self-describing format where the first character identifies the base encoding. ACP mandates **base58btc**, indicated by the `z` prefix.
+ARP uses **multibase** encoding for all public keys and signatures. Multibase is a self-describing format where the first character identifies the base encoding. ARP mandates **base58btc**, indicated by the `z` prefix.
 
 **Public keys** include a 2-byte multicodec prefix identifying the key type, followed by the raw key bytes:
 
@@ -185,12 +195,12 @@ The DID document MUST contain:
   "service": [
     {
       "id": "#acp",
-      "type": "AgentCommunicationProtocol",
+      "type": "AgentRelationsProtocol",
       "serviceEndpoint": "https://agents.google.com/order-processor/inbox"
     },
     {
       "id": "#relay",
-      "type": "ACPRelay",
+      "type": "ARPRelay",
       "serviceEndpoint": "https://relay.acprelay.net"
     }
   ]
@@ -234,7 +244,7 @@ Receivers that see a valid rotation proof MUST update their pin.
 
 **Key recovery:** If the old key is lost or compromised and cannot sign a rotation proof, the agent MUST use domain-based recovery:
 
-1. Publish a recovery record at `https://{domain}/.well-known/acp/recovery/{name}.json`:
+1. Publish a recovery record at `https://{domain}/.well-known/arp/recovery/{name}.json`:
 
 ```json
 {
@@ -268,17 +278,17 @@ Receivers that encounter a key mismatch SHOULD check for a recovery record befor
 Domain operators MUST publish a DNS SRV record:
 
 ```
-_acp._tcp.agents.google.com. 300 IN SRV 10 100 443 acp.google.com.
+_arp._tcp.agents.google.com. 300 IN SRV 10 100 443 acp.google.com.
 ```
 
-This declares: "ACP agents for this domain are reachable at `acp.google.com` on port 443, with priority 10 and weight 100."
+This declares: "ARP agents for this domain are reachable at `acp.google.com` on port 443, with priority 10 and weight 100."
 
 Multiple SRV records enable failover, load balancing, and relay fallback (Section 6).
 
 A DNS TXT record MAY advertise the protocol version:
 
 ```
-_acp.agents.google.com. 3600 IN TXT "v=acp1"
+_acp.agents.google.com. 3600 IN TXT "v=arp1"
 ```
 
 ### 5.2 Agent Card Layer
@@ -286,29 +296,29 @@ _acp.agents.google.com. 3600 IN TXT "v=acp1"
 Each agent MUST publish an Agent Card at a well-known URL:
 
 ```
-GET https://agents.google.com/.well-known/acp/{agent-name}.json
+GET https://agents.google.com/.well-known/arp/{agent-name}.json
 ```
 
 A domain-level index MUST be published at:
 
 ```
-GET https://agents.google.com/.well-known/acp/index.json
+GET https://agents.google.com/.well-known/arp/index.json
 ```
 
 The index supports cursor-based pagination:
 
 ```
-GET /.well-known/acp/index.json?cursor=eyJuIjoxMDB9&limit=100
+GET /.well-known/arp/index.json?cursor=eyJuIjoxMDB9&limit=100
 ```
 
 ```json
 {
   "domain": "agents.google.com",
-  "protocol": "acp/1.0",
+  "protocol": "arp/1.0",
   "agents": [
     {
       "name": "order-processor",
-      "url": "/.well-known/acp/order-processor.json",
+      "url": "/.well-known/arp/order-processor.json",
       "summary": "Processes purchase orders for cloud infrastructure"
     }
   ],
@@ -326,7 +336,7 @@ HTTP `Cache-Control` headers dictate freshness. Domain operators set TTLs approp
 
 ### 5.3 Open Discovery
 
-ACP does not define a global search protocol. This is deliberate. But it provides concrete mechanisms for decentralised discovery.
+ARP does not define a global search protocol. This is deliberate. But it provides concrete mechanisms for decentralised discovery.
 
 **Domain hint file.** Domain operators SHOULD publish an `agents.txt` file at the domain root:
 
@@ -335,12 +345,12 @@ GET https://google.com/agents.txt
 ```
 
 ```
-# ACP agents for this domain
-acp-version: 1.0
-acp-index: https://agents.google.com/.well-known/acp/index.json
+# ARP agents for this domain
+arp-version: 1.0
+acp-index: https://agents.google.com/.well-known/arp/index.json
 ```
 
-This is analogous to `robots.txt` — a single, predictable file that crawlers check first. It allows a root domain to point to the subdomain where agents live. The `acp-version` field declares the protocol version. Operators MAY add an `acp-docs` field linking to protocol documentation.
+This is analogous to `robots.txt` — a single, predictable file that crawlers check first. It allows a root domain to point to the subdomain where agents live. The `arp-version` field declares the protocol version. Operators MAY add an `arp-docs` field linking to protocol documentation.
 
 **Peer exchange.** Agent Cards MAY include a `peers` field listing domains the agent has successfully interacted with:
 
@@ -350,14 +360,14 @@ This is analogous to `robots.txt` — a single, predictable file that crawlers c
 }
 ```
 
-Peers are informational, not endorsements. Crawlers can follow peer links to discover additional ACP domains — similar to blogroll-based web discovery. Agents SHOULD only list peers with at least one verified completion record (Section 11).
+Peers are informational, not endorsements. Crawlers can follow peer links to discover additional ARP domains — similar to blogroll-based web discovery. Agents SHOULD only list peers with at least one verified completion record (Section 11).
 
 **Category tags.** Entries in the Agent Card index SHOULD include a `tags` array for discoverability:
 
 ```json
 {
   "name": "order-processor",
-  "url": "/.well-known/acp/order-processor.json",
+  "url": "/.well-known/arp/order-processor.json",
   "summary": "Processes purchase orders for cloud infrastructure",
   "tags": ["e-commerce", "orders", "food"]
 }
@@ -375,10 +385,10 @@ Agents go offline. Serverless functions cold-start. Edge workers are ephemeral. 
 
 ### 6.2 Relay Role
 
-A relay is an HTTPS service that accepts ACP messages on behalf of agents and delivers them when the agent comes back online. Like MX records for email.
+A relay is an HTTPS service that accepts ARP messages on behalf of agents and delivers them when the agent comes back online. Like MX records for email.
 
 A relay:
-- Accepts signed ACP messages addressed to agents it serves
+- Accepts signed ARP messages addressed to agents it serves
 - Queues them durably
 - Delivers them to the agent when the agent polls for queued messages
 - Returns delivery receipts to senders
@@ -394,9 +404,9 @@ Domain operators advertise relays via SRV records with lower priority (higher nu
 
 ```
 ; Primary: direct to agent server
-_acp._tcp.agents.google.com. 300 IN SRV 10 100 443 acp.google.com.
+_arp._tcp.agents.google.com. 300 IN SRV 10 100 443 acp.google.com.
 ; Fallback: relay for store-and-forward
-_acp._tcp.agents.google.com. 300 IN SRV 20 100 443 relay.acprelay.net.
+_arp._tcp.agents.google.com. 300 IN SRV 20 100 443 relay.acprelay.net.
 ```
 
 Senders MUST attempt SRV records in priority order. If the primary responds with 2xx, delivery is complete. If the primary is unreachable or returns 503, the sender MUST try the next SRV record (the relay).
@@ -410,7 +420,7 @@ Same as sending to an inbox. The relay accepts the message and returns:
 ```
 202 Accepted
 {
-  "acp": "1.0",
+  "arp": "1.0",
   "type": "acknowledge",
   "relay": true,
   "retentionUntil": "2026-04-18T14:30:00Z"
@@ -441,7 +451,7 @@ Relays MUST hold messages for at least 72 hours. Relays MAY hold messages for up
 
 ### 6.6 Relay Authorization
 
-A relay MUST be authorized by the agent it serves. The relay's endpoint MUST be listed in the agent's DID document as an `ACPRelay` service (Section 4.3). Senders SHOULD verify that a relay is authorized before delivering to it.
+A relay MUST be authorized by the agent it serves. The relay's endpoint MUST be listed in the agent's DID document as an `ARPRelay` service (Section 4.3). Senders SHOULD verify that a relay is authorized before delivering to it.
 
 ---
 
@@ -451,7 +461,7 @@ The Agent Card is the core capability advertisement.
 
 ```json
 {
-  "acp": "1.0",
+  "arp": "1.0",
   "name": "order-processor",
   "did": "did:web:agents.google.com:order-processor",
   "inbox": "https://agents.google.com/order-processor/inbox",
@@ -533,11 +543,11 @@ Both are required. A capability without a description is unusable by AI agents. 
 
 ### 8.1 Message Envelope
 
-Every ACP message is a signed JSON object:
+Every ARP message is a signed JSON object:
 
 ```json
 {
-  "acp": "1.0",
+  "arp": "1.0",
   "id": "msg_01HZ3K9V7N…",
   "type": "request",
   "from": "did:web:agents.united.com:purchasing",
@@ -644,7 +654,7 @@ No unsigned messages. No exceptions.
 
 **Implementer's note on JCS.** JSON Canonicalization (RFC 8785) has cross-language pitfalls that break signature interoperability if not handled correctly:
 
-- **Float serialisation.** JCS requires IEEE 754 double-precision formatting. Languages differ: Python's `json.dumps` and JavaScript's `JSON.stringify` produce different output for values like `1e20` vs `100000000000000000000`. ACP messages use strings for timestamps and identifiers, but capability schemas may include numeric fields. Implementations MUST use a JCS-compliant serialiser for signing, not a general-purpose `JSON.stringify` with sorted keys.
+- **Float serialisation.** JCS requires IEEE 754 double-precision formatting. Languages differ: Python's `json.dumps` and JavaScript's `JSON.stringify` produce different output for values like `1e20` vs `100000000000000000000`. ARP messages use strings for timestamps and identifiers, but capability schemas may include numeric fields. Implementations MUST use a JCS-compliant serialiser for signing, not a general-purpose `JSON.stringify` with sorted keys.
 - **Unicode.** JCS requires no unnecessary escaping — characters above U+001F are output literally in UTF-8, not as `\uXXXX` escapes. Some JSON libraries escape non-ASCII by default.
 - **Key ordering.** JCS sorts keys by UTF-16 code unit order, which differs from naive Unicode codepoint sort for characters outside the BMP.
 
@@ -658,7 +668,7 @@ When encrypted, the `body` field is omitted and replaced with `encrypted`:
 
 ```json
 {
-  "acp": "1.0",
+  "arp": "1.0",
   "id": "msg_01HZ3K9V7N…",
   "type": "request",
   "from": "did:web:agents.united.com:purchasing",
@@ -686,7 +696,7 @@ Encryption uses the recipient's X25519 key from the `keyAgreement` section of th
 
 ```
 POST https://agents.google.com/order-processor/inbox
-Content-Type: application/acp+json
+Content-Type: application/arp+json
 
 {…message…}
 ```
@@ -695,7 +705,7 @@ The inbox URL is obtained from the Agent Card or DID document service endpoint. 
 
 ### 9.2 Response Modes
 
-ACP supports two response modes, negotiated via the `Prefer` header:
+ARP supports two response modes, negotiated via the `Prefer` header:
 
 **Synchronous** (default for simple requests):
 
@@ -715,7 +725,7 @@ Prefer: respond-async
 
 → 202 Accepted
 {
-  "acp": "1.0",
+  "arp": "1.0",
   "type": "acknowledge",
   "correlationId": "task_01HZ3K9V7N…",
   "statusUrl": "https://agents.google.com/tasks/task_01HZ3K9V7N…",
@@ -731,7 +741,7 @@ Receivers that support callbacks MUST enforce:
 
 - **HTTPS only.** Callback URLs MUST use HTTPS. Reject `http://` callbacks.
 - **No private IPs.** Resolve the callback hostname and reject if it resolves to a private or reserved range: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `169.254.0.0/16`, `::1`, `fc00::/7`, `fe80::/10`. This prevents SSRF attacks.
-- **ACP endpoints preferred.** Receivers SHOULD verify the callback domain has an ACP SRV record.
+- **ARP endpoints preferred.** Receivers SHOULD verify the callback domain has an ARP SRV record.
 
 ### 9.4 Streaming
 
@@ -761,7 +771,7 @@ Receivers MUST track message `id` values and reject duplicates with `409 Conflic
 
 ### 10.1 Mandatory TLS
 
-All ACP endpoints MUST use HTTPS. No plaintext HTTP. No fallback.
+All ARP endpoints MUST use HTTPS. No plaintext HTTP. No fallback.
 
 ### 10.2 Authentication
 
@@ -918,7 +928,7 @@ The `verifyUrl` returns a paginated list of completion records that third partie
 
 ### 11.4 No Central Authority
 
-ACP does not define a reputation aggregator or scoring service. Completion records are portable, verifiable, and decentralized. Third-party reputation services MAY crawl and aggregate them. The protocol provides verifiable data. The scoring ecosystem builds on top.
+ARP does not define a reputation aggregator or scoring service. Completion records are portable, verifiable, and decentralized. Third-party reputation services MAY crawl and aggregate them. The protocol provides verifiable data. The scoring ecosystem builds on top.
 
 ---
 
@@ -951,7 +961,7 @@ Platforms MUST use subdomains for tenant isolation:
 This provides:
 - **DNS isolation.** Each tenant gets their own subdomain (or inherits the platform's via wildcard DNS).
 - **DID isolation.** Each tenant's DID documents are served under their subdomain.
-- **Independent Agent Cards.** Each tenant has their own `/.well-known/acp/index.json`.
+- **Independent Agent Cards.** Each tenant has their own `/.well-known/arp/index.json`.
 
 ### 12.3 Platform Responsibilities
 
@@ -1055,7 +1065,7 @@ The `negotiate` message supports protocol-level extensions:
 
 Extensions are opt-in. An agent that doesn't understand an extension ignores it. Core protocol behavior is never gated on extensions.
 
-### 15.3 What ACP Does NOT Define
+### 15.3 What ARP Does NOT Define
 
 - **Billing and payments.** Layer it as an extension.
 - **Global agent search.** Build it as a service on top of crawlable Agent Cards.
@@ -1073,8 +1083,8 @@ A complete first interaction between two agents that have never met:
 1. Agent A wants "order processing" and knows the domain google.com
 
 2. DISCOVER
-   DNS: _acp._tcp.agents.google.com → SRV → acp.google.com:443
-   HTTP: GET https://acp.google.com/.well-known/acp/order-processor.json
+   DNS: _arp._tcp.agents.google.com → SRV → acp.google.com:443
+   HTTP: GET https://acp.google.com/.well-known/arp/order-processor.json
    → Agent Card (capabilities, DID, public key, inbox URL, schemas)
 
 3. VERIFY IDENTITY
@@ -1119,7 +1129,7 @@ If Agent B had been offline at step 5, the sender would have fallen back to the 
 | Man-in-the-middle | Mandatory TLS on all endpoints |
 | Content snooping | Optional end-to-end encryption (Section 8.7) |
 | Key compromise | Key rotation with signed proof + key pinning alerts |
-| SSRF via callbacks | Private IP denylist + HTTPS requirement + ACP endpoint verification |
+| SSRF via callbacks | Private IP denylist + HTTPS requirement + ARP endpoint verification |
 | DNS hijacking | DNSSEC recommended; key pinning provides defense in depth |
 | Message loss | Store-and-forward relays with 72-hour minimum retention |
 | Storage exhaustion | Bounded idempotency window (24h–7d) + 1 MB message size limit |
@@ -1131,7 +1141,7 @@ If Agent B had been offline at step 5, the sender would have fallen back to the 
 
 ## 18. Implementation Requirements
 
-### 18.1 To Run an ACP Agent, You Need:
+### 18.1 To Run an ARP Agent, You Need:
 
 1. A domain name you control (or a tenant account on a platform)
 2. An HTTPS server
@@ -1146,11 +1156,11 @@ That's it. No special infrastructure. No blockchain. No message brokers. Relays 
 
 ### 18.2 Content Type
 
-ACP messages use `application/acp+json`. Agents MUST set this content type on all ACP messages. Agents SHOULD reject requests without it.
+ARP messages use `application/arp+json`. Agents MUST set this content type on all ARP messages. Agents SHOULD reject requests without it.
 
 ### 18.3 Minimum Viable Implementation
 
-A conformant ACP agent MUST:
+A conformant ARP agent MUST:
 - Publish a DID document
 - Publish an Agent Card with at least one capability and a `publicKey` field
 - Accept POST requests at its inbox URL
@@ -1164,7 +1174,7 @@ A conformant ACP agent MUST:
 - Implement key pinning for agents it interacts with
 - Enforce first-contact handshake for unknown senders (unless `openAccess: true`)
 
-A conformant ACP agent SHOULD:
+A conformant ARP agent SHOULD:
 - Publish a DNS SRV record
 - Configure a relay for store-and-forward
 - Support async responses for long-running tasks
@@ -1179,7 +1189,7 @@ A conformant ACP agent SHOULD:
 
 | Type | Usage |
 |------|-------|
-| `application/acp+json` | ACP messages |
+| `application/arp+json` | ARP messages |
 | `application/json` | Agent Cards, DID documents, schemas |
 | `text/event-stream` | SSE streaming responses |
 
@@ -1187,39 +1197,39 @@ A conformant ACP agent SHOULD:
 
 ```
 ; Primary agent endpoint
-_acp._tcp.agents.example.com. 300 IN SRV 10 100 443 acp.example.com.
+_arp._tcp.agents.example.com. 300 IN SRV 10 100 443 acp.example.com.
 
 ; Relay fallback (store-and-forward)
-_acp._tcp.agents.example.com. 300 IN SRV 20 100 443 relay.acprelay.net.
+_arp._tcp.agents.example.com. 300 IN SRV 20 100 443 relay.acprelay.net.
 
 ; Protocol version advertisement
-_acp.agents.example.com. 3600 IN TXT "v=acp1"
+_acp.agents.example.com. 3600 IN TXT "v=arp1"
 ```
 
 ## Appendix C: Well-Known URLs
 
 | Path | Content |
 |------|---------|
-| `/.well-known/acp/index.json` | Domain agent index (paginated) |
-| `/.well-known/acp/{name}.json` | Individual Agent Card |
-| `/.well-known/acp/recovery/{name}.json` | Key recovery record (Section 4.4) |
+| `/.well-known/arp/index.json` | Domain agent index (paginated) |
+| `/.well-known/arp/{name}.json` | Individual Agent Card |
+| `/.well-known/arp/recovery/{name}.json` | Key recovery record (Section 4.4) |
 | `/{name}/did.json` | DID document (per did:web spec) |
 | `/agents.txt` | Domain hint file for discovery (Section 5.3) |
 
 ## Appendix D: JCS Test Vectors
 
-All ACP implementations MUST produce identical canonical output for these three inputs. The expected output is the canonical form per RFC 8785.
+All ARP implementations MUST produce identical canonical output for these three inputs. The expected output is the canonical form per RFC 8785.
 
 **Vector 1 — Basic message envelope (key ordering):**
 
 Input (keys deliberately unordered):
 ```json
-{"type":"request","acp":"1.0","to":"did:web:b.com:agent","id":"msg_001","from":"did:web:a.com:agent","createdAt":"2026-04-12T00:00:00Z","body":{"text":"hello"}}
+{"type":"request","arp":"1.0","to":"did:web:b.com:agent","id":"msg_001","from":"did:web:a.com:agent","createdAt":"2026-04-12T00:00:00Z","body":{"text":"hello"}}
 ```
 
 Expected canonical output:
 ```
-{"acp":"1.0","body":{"text":"hello"},"createdAt":"2026-04-12T00:00:00Z","from":"did:web:a.com:agent","id":"msg_001","to":"did:web:b.com:agent","type":"request"}
+{"arp":"1.0","body":{"text":"hello"},"createdAt":"2026-04-12T00:00:00Z","from":"did:web:a.com:agent","id":"msg_001","to":"did:web:b.com:agent","type":"request"}
 ```
 
 **Vector 2 — Numeric values and nested objects:**
@@ -1275,7 +1285,7 @@ If the decoded bytes are 32 (no prefix) instead of 34, the implementation is not
 
 ## Appendix E: Implementer's Quick Reference
 
-This section is a self-contained guide for sending your first ACP message to a remote agent. It covers the exact bytes, encodings, and HTTP calls in order.
+This section is a self-contained guide for sending your first ARP message to a remote agent. It covers the exact bytes, encodings, and HTTP calls in order.
 
 ### Step 1: Generate an Ed25519 key pair
 
@@ -1290,7 +1300,7 @@ your_public_key = "z" + base58btc( 0xed01 + raw_32_byte_public_key )
 Fetch the Agent Card:
 
 ```
-GET https://<domain>/.well-known/acp/<agent-name>.json
+GET https://<domain>/.well-known/arp/<agent-name>.json
 ```
 
 From the response, extract:
@@ -1305,7 +1315,7 @@ Build a negotiate message. The `body` MUST include `firstContact: true` and your
 
 ```json
 {
-  "acp": "1.0",
+  "arp": "1.0",
   "id": "msg_<uuid>",
   "type": "negotiate",
   "from": "did:web:yourdomain.com:your-agent",
@@ -1323,7 +1333,7 @@ Sign it (see Step 5 below), then POST:
 
 ```
 POST <inbox-url>
-Content-Type: application/acp+json
+Content-Type: application/arp+json
 
 <signed-message-json>
 ```
@@ -1336,7 +1346,7 @@ Now send the actual request. The `capability` field MUST match one of the agent'
 
 ```json
 {
-  "acp": "1.0",
+  "arp": "1.0",
   "id": "msg_<uuid>",
   "type": "request",
   "from": "did:web:yourdomain.com:your-agent",
@@ -1394,7 +1404,7 @@ The agent's response is also signed. To verify:
 |---------|---------|-----|
 | JSON keys not sorted recursively | `AUTH_FAILED` | Use a proper JCS library, not `JSON.stringify` with `sort_keys` |
 | Missing `z` prefix on public key | `AUTH_FAILED` or key parse error | All multibase values start with `z` |
-| `Content-Type: application/json` | `415` or rejected | Use `application/acp+json` |
+| `Content-Type: application/json` | `415` or rejected | Use `application/arp+json` |
 | Missing `firstContact: true` | `FIRST_CONTACT_REQUIRED` (403) | Include in negotiate body for unknown agents |
 | `signature` field included during canonicalization | `AUTH_FAILED` | Remove `signature` before JCS, add it back after |
 | Stale `createdAt` timestamp | `MESSAGE_EXPIRED` | Use current time, not a cached value |

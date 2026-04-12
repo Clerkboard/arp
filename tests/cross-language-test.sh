@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────────────────────
-# ACP Cross-Language Signature Verification Test
+# ARP Cross-Language Signature Verification Test
 #
 # Proves that Ed25519 signatures + JCS canonicalisation are interoperable
 # between the TypeScript and Python reference implementations.
@@ -66,16 +66,16 @@ done
 
 # ── Start servers ────────────────────────────────────────────────────────────
 
-echo -e "${BOLD}ACP Cross-Language Test${NC}"
+echo -e "${BOLD}ARP Cross-Language Test${NC}"
 echo "────────────────────────────────────────"
 echo ""
 
 echo -e "${DIM}Starting TypeScript server (port $TS_PORT)…${NC}"
-(cd "$TS_DIR" && ACP_DATA_DIR="$TS_DATA" npx tsx src/index.ts) > "$WORK_DIR/ts.log" 2>&1 &
+(cd "$TS_DIR" && ARP_DATA_DIR="$TS_DATA" npx tsx src/index.ts) > "$WORK_DIR/ts.log" 2>&1 &
 TS_PID=$!
 
 echo -e "${DIM}Starting Python server (port $PY_PORT)…${NC}"
-(cd "$PY_DIR" && ACP_DATA_DIR="$PY_DATA" python3 server.py) > "$WORK_DIR/py.log" 2>&1 &
+(cd "$PY_DIR" && ARP_DATA_DIR="$PY_DATA" python3 server.py) > "$WORK_DIR/py.log" 2>&1 &
 PY_PID=$!
 
 wait_for() {
@@ -189,7 +189,7 @@ function check(ok, label) {
 const kp = makeKeyPair();
 
 // ── Fetch Python server's public key ────────────────────────────────────────
-const card = await fetch(`${PY}/.well-known/acp/echo.json`).then(r => r.json());
+const card = await fetch(`${PY}/.well-known/arp/echo.json`).then(r => r.json());
 const pyKey = card.publicKey;
 check(typeof pyKey === 'string' && pyKey.startsWith('z'), 'Fetched Python server public key');
 
@@ -207,7 +207,7 @@ const neg = signMsg({
 
 const negR = await fetch(`${PY}/echo/inbox`, {
   method: 'POST',
-  headers: { 'Content-Type': 'application/acp+json' },
+  headers: { 'Content-Type': 'application/arp+json' },
   body: JSON.stringify(neg),
 });
 const negD = await negR.json();
@@ -233,7 +233,7 @@ const echoReq = signMsg({
 
 const echoR = await fetch(`${PY}/echo/inbox`, {
   method: 'POST',
-  headers: { 'Content-Type': 'application/acp+json' },
+  headers: { 'Content-Type': 'application/arp+json' },
   body: JSON.stringify(echoReq),
 });
 const echoD = await echoR.json();
@@ -273,7 +273,7 @@ const jcsReq = signMsg({
 
 const jcsR = await fetch(`${PY}/echo/inbox`, {
   method: 'POST',
-  headers: { 'Content-Type': 'application/acp+json' },
+  headers: { 'Content-Type': 'application/arp+json' },
   body: JSON.stringify(jcsReq),
 });
 const jcsD = await jcsR.json();
@@ -306,7 +306,7 @@ tampered.signature = 'z' + b58encode(sigBytes);
 
 const tamR = await fetch(`${PY}/echo/inbox`, {
   method: 'POST',
-  headers: { 'Content-Type': 'application/acp+json' },
+  headers: { 'Content-Type': 'application/arp+json' },
   body: JSON.stringify(tampered),
 });
 const tamD = await tamR.json();
@@ -424,7 +424,7 @@ def http_get(url):
 def http_post(url, data):
     body = json.dumps(data).encode("utf-8")
     req = urllib.request.Request(
-        url, data=body, headers={"Content-Type": "application/acp+json"}
+        url, data=body, headers={"Content-Type": "application/arp+json"}
     )
     try:
         with urllib.request.urlopen(req) as r:
@@ -434,7 +434,7 @@ def http_post(url, data):
 
 
 # ── Fetch TypeScript server's public key ────────────────────────────────────
-card = http_get(f"{TS_URL}/.well-known/acp/echo.json")
+card = http_get(f"{TS_URL}/.well-known/arp/echo.json")
 ts_key = card["publicKey"]
 check(isinstance(ts_key, str) and ts_key.startswith("z"), "Fetched TypeScript server public key")
 
@@ -442,7 +442,7 @@ check(isinstance(ts_key, str) and ts_key.startswith("z"), "Fetched TypeScript se
 # Python signs → Node.js verifies
 neg = sign_msg(
     {
-        "acp": "1.0",
+        "arp": "1.0",
         "id": f"msg_{uuid.uuid4().hex}",
         "type": "negotiate",
         "from": ME,
@@ -462,7 +462,7 @@ check(verify_msg(neg_resp, ts_key), "Python verified TypeScript signature on neg
 # Python signs → Node.js verifies
 echo_msg = sign_msg(
     {
-        "acp": "1.0",
+        "arp": "1.0",
         "id": f"msg_{uuid.uuid4().hex}",
         "type": "request",
         "from": ME,
@@ -489,7 +489,7 @@ check(verify_msg(echo_resp, ts_key), "Python verified TypeScript signature on ec
 # nested objects.  If the two JCS implementations diverge, signature fails.
 jcs_msg = sign_msg(
     {
-        "acp": "1.0",
+        "arp": "1.0",
         "id": f"msg_{uuid.uuid4().hex}",
         "type": "request",
         "from": ME,
@@ -523,7 +523,7 @@ check(verify_msg(jcs_resp, ts_key), "Python verified TypeScript signature on Uni
 # Proves the server actually verifies, not just accepting anything.
 tampered = sign_msg(
     {
-        "acp": "1.0",
+        "arp": "1.0",
         "id": f"msg_{uuid.uuid4().hex}",
         "type": "request",
         "from": ME,
