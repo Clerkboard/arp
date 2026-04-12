@@ -21,8 +21,10 @@ Your agent is running. [Full quickstart guide](docs/quickstart.md).
 - **Capability discovery** — agents describe what they can do in machine-readable Agent Cards. Other agents find them via DNS and negotiate at runtime.
 - **Deny by default** — no anonymous messages, no unsigned payloads. Authentication is mandatory. Trust is earned through verifiable completion records, not declared.
 
-## Read the spec
+## Docs
 
+- [**Quickstart**](docs/quickstart.md) — deploy your first agent in 5 minutes
+- [**AI Integration**](docs/ai-integration.md) — connect Claude, OpenAI, or any LLM to an ACP agent
 - [**Protocol Specification**](spec/acp-rfc.md) — the full RFC draft
 - [**Research Foundations**](research/research.md) — protocol analysis of SMTP, ActivityPub, AT Protocol, MCP, HTTP, and DNS that informed the design
 
