@@ -231,9 +231,9 @@ const echoD = await echoR.json();
 
 check(echoR.status === 200, 'Python accepted TS-signed echo request');
 check(echoD.type === 'response', 'Response type is response');
-// Python echo returns body as-is
-check(echoD.body?.message === 'Hello from TypeScript', 'Echo body preserved across languages');
-check(echoD.body?.crossLanguage === true, 'Boolean value preserved');
+// Both servers wrap echo as { echo: body, receivedAt: "..." }
+check(echoD.body?.echo?.message === 'Hello from TypeScript', 'Echo body preserved across languages');
+check(echoD.body?.echo?.crossLanguage === true, 'Boolean value preserved');
 // Python signs → Node.js verifies
 check(verifyMsg(echoD, pyKey), 'Node.js verified Python signature on echo response');
 
@@ -270,10 +270,10 @@ const jcsR = await fetch(`${PY}/echo/inbox`, {
 const jcsD = await jcsR.json();
 
 check(jcsR.status === 200, 'Python accepted TS-signed message with Unicode + numerics');
-check(jcsD.body?.emoji === '☕', 'Unicode emoji preserved');
-check(jcsD.body?.path === '/données/café', 'Unicode accented chars preserved');
-check(jcsD.body?.price === 9.99, 'Float value preserved');
-check(jcsD.body?.nullVal === null, 'Null value preserved');
+check(jcsD.body?.echo?.emoji === '☕', 'Unicode emoji preserved');
+check(jcsD.body?.echo?.path === '/données/café', 'Unicode accented chars preserved');
+check(jcsD.body?.echo?.price === 9.99, 'Float value preserved');
+check(jcsD.body?.echo?.nullVal === null, 'Null value preserved');
 check(verifyMsg(jcsD, pyKey), 'Node.js verified Python signature on Unicode response');
 
 // ── Tampered signature (negative test) ─────────────────────────────────────
