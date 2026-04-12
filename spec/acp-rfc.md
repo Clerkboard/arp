@@ -437,7 +437,6 @@ The Agent Card is the core capability advertisement.
 
   "reputation": {
     "completions": 847,
-    "uniqueDomains": 34,
     "since": "2026-01-15T00:00:00Z",
     "verifyUrl": "https://agents.google.com/order-processor/completions"
   },
@@ -799,7 +798,6 @@ After a task completes successfully, both agents SHOULD sign a completion record
     "requester": "did:web:agents.united.com:purchasing",
     "provider": "did:web:agents.google.com:order-processor"
   },
-  "initiatedAt": "2026-04-11T14:30:00Z",
   "completedAt": "2026-04-11T15:00:00Z",
   "contentHash": "sha256:9f86d08…",
   "signatures": {
@@ -809,19 +807,7 @@ After a task completes successfully, both agents SHOULD sign a completion record
 }
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `taskId` | string | MUST | The `correlationId` of the completed task |
-| `capability` | string | MUST | The capability that was fulfilled |
-| `agents` | object | MUST | DIDs of both participants |
-| `initiatedAt` | string | MUST | ISO 8601 timestamp of the original `request` message |
-| `completedAt` | string | MUST | ISO 8601 timestamp of the final `response` message |
-| `contentHash` | string | MUST | SHA-256 hex digest of the final `response` message body |
-| `signatures` | object | MUST | Both agents' signatures over the canonical record |
-
-The `contentHash` proves the record corresponds to a real interaction without revealing the content. The `initiatedAt` timestamp proves the task spanned real wall-clock time.
-
-**Minimum duration:** Receivers evaluating completion records SHOULD discard records where `completedAt - initiatedAt` is less than 10 seconds. Legitimate tasks require processing time. Fabricated completions between colluding agents can be generated at high frequency but cannot fake elapsed time without spending it.
+The `contentHash` is a hash of the final `response` message body. It proves the record corresponds to a real interaction without revealing the content.
 
 ### 11.2 Exchange Flow
 
@@ -834,25 +820,11 @@ Either agent can present completion records to third parties as proof of track r
 
 ### 11.3 Trust Signals
 
-Completion records enable trust assessment without a central authority. **Domain diversity — not volume — is the primary signal.** An agent with 50 completions across 30 independent domains is more credible than an agent with 5,000 completions all with one counterparty.
+Completion records enable trust assessment without a central authority:
 
-The trust signals, in order of importance:
-
-- **Domain diversity:** How many unique counterparty domains does this agent have verified completions with? Sybil-attacking domain diversity requires registering and operating real domains with DNS and TLS — orders of magnitude more expensive than fabricating key pairs.
+- **Volume:** How many verified completions does this agent have?
 - **Recency:** When was the last completion?
-- **Duration:** Do the completion records reflect real processing time (`completedAt - initiatedAt`)?
-- **Volume:** Total completions, discounted by the factors below.
-
-**Discount factors.** Receivers evaluating reputation SHOULD apply these heuristics:
-
-| Factor | Treatment |
-|--------|-----------|
-| Both agents on the same domain | Ignore the completion entirely |
-| `completedAt - initiatedAt` < 10 seconds | Ignore |
-| Same counterparty, > 10 completions per day | Count as 10 |
-| Counterparty domain registered < 30 days | Weight at 10% |
-
-These heuristics are not enforceable — receivers apply their own judgment. But defining them in the spec ensures implementations converge on the same evaluation, which is what makes the signal useful across the ecosystem.
+- **Diversity:** Has this agent worked with many different counterparties, or just one?
 
 Agents SHOULD publish their completion stats in the Agent Card:
 
@@ -860,14 +832,13 @@ Agents SHOULD publish their completion stats in the Agent Card:
 {
   "reputation": {
     "completions": 847,
-    "uniqueDomains": 34,
     "since": "2026-01-15T00:00:00Z",
     "verifyUrl": "https://agents.google.com/order-processor/completions"
   }
 }
 ```
 
-The `uniqueDomains` field is the count of distinct counterparty domains with at least one valid completion record. The `verifyUrl` returns a paginated list of completion records that third parties can independently verify and re-evaluate using their own discount factors.
+The `verifyUrl` returns a paginated list of completion records that third parties can independently verify.
 
 ### 11.4 No Central Authority
 
