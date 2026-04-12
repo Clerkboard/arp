@@ -4,7 +4,7 @@
 
 ```
 Status:     Draft
-Version:    0.3
+Version:    0.3.1
 Authors:    Tiago Pita
 ```
 
@@ -80,9 +80,42 @@ ACP has five layers. Each is independent and replaceable.
 
 ## 4. Identity
 
-### 4.1 DID as Identity
+### 4.1 ACP Address
 
-Every agent MUST have a Decentralized Identifier (DID) using the `did:web` method.
+Every agent has a human-readable address in the format:
+
+```
+{name}@{domain}
+```
+
+This is the canonical way to reference an ACP agent — on websites, in documentation, on business cards, or in conversation. It is deliberately modelled on email addresses for familiarity.
+
+Examples:
+
+| Agent | Address |
+|-------|---------|
+| Vodafone customer support | `support@agents.vodafone.com` |
+| Google order processor | `order-processor@agents.google.com` |
+| United Airlines purchasing | `purchasing@agents.united.com` |
+
+**Resolution.** An ACP address resolves deterministically to an Agent Card:
+
+```
+support@agents.vodafone.com
+  → https://agents.vodafone.com/.well-known/acp/support.json
+```
+
+The resolution rule:
+
+1. Optionally, query DNS for `_acp._tcp.{domain}` SRV record to discover the host (allows `agents.vodafone.com` to delegate to a different server)
+2. Fetch the Agent Card at `https://{domain}/.well-known/acp/{name}.json`
+3. From the Agent Card, obtain the agent's DID, inbox URL, public key, and capabilities
+
+If no SRV record exists, the domain itself serves the Agent Card over HTTPS. IP addresses are not valid in addresses — `did:web` requires a domain.
+
+### 4.2 DID as Identity
+
+Every agent MUST also have a Decentralized Identifier (DID) using the `did:web` method. The DID is the agent's cryptographic identity — used in message signing, key pinning, and verification.
 
 An agent operated by `google.com` with local name `order-processor`:
 
@@ -96,7 +129,38 @@ This resolves to:
 GET https://agents.google.com/order-processor/did.json
 ```
 
-### 4.2 DID Document
+The ACP address and DID are two representations of the same agent. The address is for people; the DID is for the protocol.
+
+### 4.3 Cryptographic Encoding and DID Document
+
+### 4.3.1 Multibase Encoding
+
+ACP uses **multibase** encoding for all public keys and signatures. Multibase is a self-describing format where the first character identifies the base encoding. ACP mandates **base58btc**, indicated by the `z` prefix.
+
+**Public keys** include a 2-byte multicodec prefix identifying the key type, followed by the raw key bytes:
+
+```
+z  +  base58btc( multicodec_prefix  +  raw_key_bytes )
+```
+
+For Ed25519, the multicodec prefix is `0xed01`. The decoded bytes are exactly **34 bytes**: 2-byte prefix + 32-byte raw public key.
+
+```
+Encoding:  z + base58btc( 0xed 0x01 + <32 raw bytes> )  →  "z6Mkf5rGMoatrSj1f…"
+Decoding:  strip 'z', base58btc-decode → 34 bytes
+           verify bytes[0..2] == 0xed 0x01
+           raw key = bytes[2..34]
+```
+
+Implementations MUST include the `0xed01` multicodec prefix when encoding public keys and MUST verify and strip it when decoding. If the prefix does not match `0xed01`, the key MUST be rejected.
+
+**Signatures** do NOT include a multicodec prefix — they are raw bytes:
+
+```
+z  +  base58btc( <64 raw signature bytes> )
+```
+
+This encoding is consistent with the `Ed25519VerificationKey2020` type used in W3C DID documents and the W3C Verifiable Credentials ecosystem.
 
 The DID document MUST contain:
 
@@ -135,7 +199,7 @@ The DID document MUST contain:
 
 The `keyAgreement` key is used for content encryption (Section 8.7). If omitted, encrypted messaging is not available for this agent. The `#relay` service entry authorizes a relay to accept messages on the agent's behalf (Section 6).
 
-### 4.3 Key Pinning
+### 4.4 Key Pinning
 
 `did:web` depends on DNS. DNS goes down. Domains lapse. Key pinning provides a safety net.
 
@@ -189,29 +253,11 @@ Receivers that encounter a key mismatch SHOULD check for a recovery record befor
 
 **Rotation notification:** When an agent rotates or recovers a key, it SHOULD send a signed `negotiate` message (using the new key) to all agents in its pin store, with `body.keyRotation: true`. This allows contacts to proactively verify and update their pins rather than discovering the change on next interaction.
 
-### 4.4 Hard Choices on Identity
+### 4.5 Hard Choices on Identity
 
-- **`did:web` only.** Not `did:plc`, not `did:key`, not `did:ion`. `did:web` uses existing HTTPS infrastructure. It ties identity to domain ownership, which provides organizational trust context. Key pinning (Section 4.3) mitigates the DNS availability risk.
+- **`did:web` only.** Not `did:plc`, not `did:key`, not `did:ion`. `did:web` uses existing HTTPS infrastructure. It ties identity to domain ownership, which provides organizational trust context. Key pinning (Section 4.4) mitigates the DNS availability risk.
 - **Ed25519 keys.** MUST support Ed25519. MAY support P-256 for environments that require NIST curves. No RSA. It's 2026.
-- **Key rotation.** Rotation MUST be proven by signing the new key with the old key (Section 4.3).
-
-### 4.5 Addressing
-
-Agents are addressed as:
-
-```
-order-processor@agents.google.com
-```
-
-This is sugar. The canonical form is the DID. The `agent@domain` form is for humans and for DNS-based routing. Implementations MUST resolve `agent@domain` to its DID before processing.
-
-Resolution:
-
-1. Query DNS for `_acp._tcp.agents.google.com` SRV record → host + port
-2. Fetch Agent Card at `https://{host}/.well-known/acp/order-processor.json`
-3. Agent Card contains the DID → fetch DID document → get inbox URL
-
-IP addresses are not valid in addresses. `did:web` requires a domain.
+- **Key rotation.** Rotation MUST be proven by signing the new key with the old key (Section 4.4).
 
 ---
 
@@ -290,10 +336,11 @@ GET https://google.com/agents.txt
 
 ```
 # ACP agents for this domain
+acp-version: 1.0
 acp-index: https://agents.google.com/.well-known/acp/index.json
 ```
 
-This is analogous to `robots.txt` — a single, predictable file that crawlers check first. It allows a root domain to point to the subdomain where agents live.
+This is analogous to `robots.txt` — a single, predictable file that crawlers check first. It allows a root domain to point to the subdomain where agents live. The `acp-version` field declares the protocol version. Operators MAY add an `acp-docs` field linking to protocol documentation.
 
 **Peer exchange.** Agent Cards MAY include a `peers` field listing domains the agent has successfully interacted with:
 
@@ -394,7 +441,7 @@ Relays MUST hold messages for at least 72 hours. Relays MAY hold messages for up
 
 ### 6.6 Relay Authorization
 
-A relay MUST be authorized by the agent it serves. The relay's endpoint MUST be listed in the agent's DID document as an `ACPRelay` service (Section 4.2). Senders SHOULD verify that a relay is authorized before delivering to it.
+A relay MUST be authorized by the agent it serves. The relay's endpoint MUST be listed in the agent's DID document as an `ACPRelay` service (Section 4.3). Senders SHOULD verify that a relay is authorized before delivering to it.
 
 ---
 
@@ -579,15 +626,19 @@ All messages related to the same task share a `correlationId`. The agent that in
 Messages MUST be signed by the sender's Ed25519 key (referenced in their DID document).
 
 Signing process:
-1. Serialize the message without the `signature` field using JCS (JSON Canonicalization Scheme, RFC 8785)
-2. Sign the canonical bytes with the sender's private key
-3. Encode the signature as a multibase string and include it as the `signature` field
+1. Build the message object **without** the `signature` field
+2. Serialize using JCS (JSON Canonicalization Scheme, RFC 8785) — this recursively sorts all object keys and produces minimal JSON with no whitespace
+3. Sign the UTF-8 bytes of the canonical string with Ed25519 using the sender's private key (producing 64 raw bytes)
+4. Encode the signature as multibase: `z` + base58btc of the 64 raw signature bytes (no multicodec prefix — only public keys use the prefix)
+5. Add the `signature` field to the message object
 
-Receivers MUST:
-1. Resolve the sender's DID document (or use pinned key per Section 4.3)
-2. Extract the public key from the `authentication` verification method
-3. Verify the signature against the canonical message bytes
-4. Reject the message if verification fails
+Verification process:
+1. Remove the `signature` field from the received message
+2. Serialize the remaining object using JCS (identical canonicalization as signing)
+3. Decode the signature: strip the `z` prefix and base58btc-decode to recover the 64 raw bytes
+4. Resolve the sender's public key — either from their DID document or a pinned key (Section 4.4)
+5. Verify the Ed25519 signature against the canonical bytes using the sender's public key
+6. Reject the message if verification fails
 
 No unsigned messages. No exceptions.
 
@@ -745,7 +796,17 @@ There is no "empty allowlist means accept everyone." An agent with `openAccess: 
 
 When an agent contacts another for the first time and is not on the receiver's explicit `allowlist`, the following handshake is REQUIRED:
 
-1. **Sender sends a `negotiate` message** with `"firstContact": true` in the body. This message carries the sender's identity and intent — no task payload.
+1. **Sender sends a `negotiate` message** with the following body:
+
+```json
+{
+  "firstContact": true,
+  "publicKey": "z6Mk...<sender's multibase Ed25519 public key>",
+  "intent": "Optional description of why the sender is making contact"
+}
+```
+
+The `body.firstContact` field MUST be `true`. The `body.publicKey` field MUST contain the sender's `publicKeyMultibase` value (Section 4.3.1) — the receiver uses this for TOFU key pinning. A negotiate message with `body.firstContact: true` but no `body.publicKey` MUST be rejected with error code `SCHEMA_INVALID`.
 
 2. **Receiver evaluates the sender** based on:
    - Denylist (reject immediately if matched)
@@ -1141,7 +1202,7 @@ _acp.agents.example.com. 3600 IN TXT "v=acp1"
 |------|---------|
 | `/.well-known/acp/index.json` | Domain agent index (paginated) |
 | `/.well-known/acp/{name}.json` | Individual Agent Card |
-| `/.well-known/acp/recovery/{name}.json` | Key recovery record (Section 4.3) |
+| `/.well-known/acp/recovery/{name}.json` | Key recovery record (Section 4.4) |
 | `/{name}/did.json` | DID document (per did:web spec) |
 | `/agents.txt` | Domain hint file for discovery (Section 5.3) |
 
@@ -1186,6 +1247,157 @@ Expected canonical output:
 ```
 
 Note: the Unicode characters MUST appear as literal UTF-8, not as `\uXXXX` escapes. Array element order is preserved (JCS only sorts object keys). Implementations that produce different output for any of these vectors have a JCS bug that will cause signature verification failures.
+
+**Vector 4 — Key encoding round-trip:**
+
+Given a raw 32-byte Ed25519 public key (hex):
+```
+d75a980182b10ab7d54bfed3c964073a0ee172f3daa3f4a18446b0b8d183f8e3
+```
+
+Multicodec-prefixed bytes (34 bytes, hex):
+```
+ed01 d75a980182b10ab7d54bfed3c964073a0ee172f3daa3f4a18446b0b8d183f8e3
+```
+
+Expected multibase string:
+```
+z6MkiTBz1ymuepAQ4HEHYSF1H8quG5GLVVQR3djdX3mDooWp
+```
+
+Decoding steps:
+1. Strip `z` prefix → base58btc string
+2. Base58btc-decode → 34 bytes
+3. Verify bytes[0..2] == `0xed 0x01` → Ed25519 key
+4. Raw key = bytes[2..34] → 32 bytes matching the original hex above
+
+If the decoded bytes are 32 (no prefix) instead of 34, the implementation is not including the multicodec prefix — this will cause interoperability failures with implementations that follow the W3C convention.
+
+## Appendix E: Implementer's Quick Reference
+
+This section is a self-contained guide for sending your first ACP message to a remote agent. It covers the exact bytes, encodings, and HTTP calls in order.
+
+### Step 1: Generate an Ed25519 key pair
+
+Generate an Ed25519 key pair. Store the private key securely. Encode the 32-byte raw public key with the multicodec prefix as multibase:
+
+```
+your_public_key = "z" + base58btc( 0xed01 + raw_32_byte_public_key )
+```
+
+### Step 2: Discover the target agent
+
+Fetch the Agent Card:
+
+```
+GET https://<domain>/.well-known/acp/<agent-name>.json
+```
+
+From the response, extract:
+- `inbox` — the URL to POST messages to
+- `publicKey` — the agent's multibase public key (for verifying responses)
+- `did` — the agent's DID (for the `to` field)
+- `capabilities` — what the agent can do
+
+### Step 3: First-contact handshake
+
+Build a negotiate message. The `body` MUST include `firstContact: true` and your public key:
+
+```json
+{
+  "acp": "1.0",
+  "id": "msg_<uuid>",
+  "type": "negotiate",
+  "from": "did:web:yourdomain.com:your-agent",
+  "to": "<agent-did-from-card>",
+  "createdAt": "2026-04-12T10:00:00Z",
+  "body": {
+    "firstContact": true,
+    "publicKey": "z6Mk...<your-multibase-public-key>",
+    "intent": "I want to use your echo capability."
+  }
+}
+```
+
+Sign it (see Step 5 below), then POST:
+
+```
+POST <inbox-url>
+Content-Type: application/acp+json
+
+<signed-message-json>
+```
+
+A `200` response with `type: "acknowledge"` means the handshake succeeded and the agent pinned your key.
+
+### Step 4: Send a request
+
+Now send the actual request. The `capability` field MUST match one of the agent's declared capabilities:
+
+```json
+{
+  "acp": "1.0",
+  "id": "msg_<uuid>",
+  "type": "request",
+  "from": "did:web:yourdomain.com:your-agent",
+  "to": "<agent-did>",
+  "capability": "echo",
+  "correlationId": "task_<uuid>",
+  "createdAt": "2026-04-12T10:00:01Z",
+  "body": {
+    "message": "Hello from my agent!"
+  }
+}
+```
+
+Sign and POST to the same inbox URL.
+
+### Step 5: How to sign (byte-level)
+
+Given a message object without the `signature` field:
+
+```
+1. JCS-canonicalize the object
+     → recursively sort all object keys
+     → no whitespace between tokens
+     → numbers: no trailing zeros, no leading +
+     → strings: minimal escaping, UTF-8 literals (not \uXXXX)
+     → result is a UTF-8 string
+
+2. Ed25519-sign the UTF-8 bytes
+     → input:  canonical_string as byte[]
+     → key:    your 32-byte Ed25519 private key
+     → output: 64-byte signature
+
+3. Encode as multibase
+     → "z" + base58btc( 64_signature_bytes )
+
+4. Add to message
+     → message.signature = "z3hR9xK7mN…"
+```
+
+### Step 6: Verify the response
+
+The agent's response is also signed. To verify:
+
+```
+1. Save the "signature" field, then remove it from the response object
+2. JCS-canonicalize the remaining object (same algorithm as signing)
+3. Decode the signature: strip "z", base58btc-decode → 64 bytes
+4. Decode the agent's public key (from Agent Card): strip "z", base58btc-decode → 32 bytes
+5. Ed25519-verify( canonical_bytes, signature_bytes, public_key_bytes )
+```
+
+### Common Mistakes
+
+| Mistake | Symptom | Fix |
+|---------|---------|-----|
+| JSON keys not sorted recursively | `AUTH_FAILED` | Use a proper JCS library, not `JSON.stringify` with `sort_keys` |
+| Missing `z` prefix on public key | `AUTH_FAILED` or key parse error | All multibase values start with `z` |
+| `Content-Type: application/json` | `415` or rejected | Use `application/acp+json` |
+| Missing `firstContact: true` | `FIRST_CONTACT_REQUIRED` (403) | Include in negotiate body for unknown agents |
+| `signature` field included during canonicalization | `AUTH_FAILED` | Remove `signature` before JCS, add it back after |
+| Stale `createdAt` timestamp | `MESSAGE_EXPIRED` | Use current time, not a cached value |
 
 ---
 

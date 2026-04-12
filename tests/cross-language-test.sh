@@ -145,11 +145,13 @@ function jcs(v) {
 
 // ── Ed25519 helpers ─────────────────────────────────────────────────────────
 const SPKI_HDR = Buffer.from('302a300506032b6570032100', 'hex');
+const MC_PREFIX = Buffer.from([0xed, 0x01]);
 
 function makeKeyPair() {
   const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
   const raw = publicKey.export({ type: 'spki', format: 'der' }).subarray(-32);
-  return { privateKey, rawPublic: raw, multibase: 'z' + b58encode(raw) };
+  const prefixed = Buffer.concat([MC_PREFIX, raw]);
+  return { privateKey, rawPublic: raw, multibase: 'z' + b58encode(prefixed) };
 }
 
 function signMsg(msg, privKey) {
@@ -158,10 +160,17 @@ function signMsg(msg, privKey) {
   return { ...msg, signature: 'z' + b58encode(sig) };
 }
 
+function decodeKey(pubMultibase) {
+  const decoded = b58decode(pubMultibase.slice(1));
+  if (decoded.length === 34 && decoded[0] === 0xed && decoded[1] === 0x01) return decoded.subarray(2);
+  if (decoded.length === 32) return decoded;
+  throw new Error('Invalid key length: ' + decoded.length);
+}
+
 function verifyMsg(msg, pubMultibase) {
   const { signature, ...rest } = msg;
   if (!signature) return false;
-  const raw = b58decode(pubMultibase.slice(1));
+  const raw = decodeKey(pubMultibase);
   const pk = crypto.createPublicKey({ key: Buffer.concat([SPKI_HDR, raw]), format: 'der', type: 'spki' });
   return crypto.verify(null, Buffer.from(jcs(rest), 'utf-8'), pk, b58decode(signature.slice(1)));
 }
@@ -360,25 +369,37 @@ def canonicalize(obj):
 
 
 # ── Multibase (z = base58btc) ───────────────────────────────────────────────
-def mb_encode(raw: bytes) -> str:
-    return "z" + base58.b58encode(raw).decode("ascii")
+MC_PREFIX = bytes([0xED, 0x01])
 
+def mb_encode_key(raw: bytes) -> str:
+    return "z" + base58.b58encode(MC_PREFIX + raw).decode("ascii")
+
+def mb_encode_sig(raw: bytes) -> str:
+    return "z" + base58.b58encode(raw).decode("ascii")
 
 def mb_decode(mb: str) -> bytes:
     return base58.b58decode(mb[1:])
+
+def mb_decode_key(mb: str) -> bytes:
+    decoded = mb_decode(mb)
+    if len(decoded) == 34 and decoded[:2] == MC_PREFIX:
+        return decoded[2:]
+    if len(decoded) == 32:
+        return decoded
+    raise ValueError(f"Invalid key length: {len(decoded)}")
 
 
 # ── Ed25519 ─────────────────────────────────────────────────────────────────
 private_key = Ed25519PrivateKey.generate()
 public_key = private_key.public_key()
 raw_pub = public_key.public_bytes(Encoding.Raw, PublicFormat.Raw)
-my_pub_mb = mb_encode(raw_pub)
+my_pub_mb = mb_encode_key(raw_pub)
 
 
 def sign_msg(msg: dict) -> dict:
     copy = {k: v for k, v in msg.items() if k != "signature"}
     sig = private_key.sign(canonicalize(copy).encode("utf-8"))
-    return {**msg, "signature": mb_encode(sig)}
+    return {**msg, "signature": mb_encode_sig(sig)}
 
 
 def verify_msg(msg: dict, pub_mb: str) -> bool:
@@ -387,7 +408,7 @@ def verify_msg(msg: dict, pub_mb: str) -> bool:
         return False
     copy = {k: v for k, v in msg.items() if k != "signature"}
     try:
-        pk = Ed25519PublicKey.from_public_bytes(mb_decode(pub_mb))
+        pk = Ed25519PublicKey.from_public_bytes(mb_decode_key(pub_mb))
         pk.verify(mb_decode(sig_mb), canonicalize(copy).encode("utf-8"))
         return True
     except Exception:
@@ -517,7 +538,7 @@ tampered = sign_msg(
 # Flip a byte in the signature to invalidate it
 sig_bytes = bytearray(mb_decode(tampered["signature"]))
 sig_bytes[0] ^= 0xFF
-tampered["signature"] = mb_encode(bytes(sig_bytes))
+tampered["signature"] = mb_encode_sig(bytes(sig_bytes))
 
 status, tam_resp = http_post(f"{TS_URL}/echo/inbox", tampered)
 check(status != 200, "TypeScript rejected tampered signature")
