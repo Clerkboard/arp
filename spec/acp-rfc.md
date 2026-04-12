@@ -798,7 +798,9 @@ After a task completes successfully, both agents SHOULD sign a completion record
     "requester": "did:web:agents.united.com:purchasing",
     "provider": "did:web:agents.google.com:order-processor"
   },
+  "initiatedAt": "2026-04-11T14:30:00Z",
   "completedAt": "2026-04-11T15:00:00Z",
+  "requestHash": "sha256:7b226163…",
   "contentHash": "sha256:9f86d08…",
   "signatures": {
     "requester": "z3hR9xK7mN…",
@@ -807,7 +809,20 @@ After a task completes successfully, both agents SHOULD sign a completion record
 }
 ```
 
-The `contentHash` is a hash of the final `response` message body. It proves the record corresponds to a real interaction without revealing the content.
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `taskId` | string | MUST | The `correlationId` of the completed task |
+| `capability` | string | MUST | The capability that was fulfilled |
+| `agents` | object | MUST | DIDs of both participants |
+| `initiatedAt` | string | MUST | ISO 8601 timestamp of the original `request` message |
+| `completedAt` | string | MUST | ISO 8601 timestamp of the final `response` message |
+| `requestHash` | string | MUST | SHA-256 hex digest of the original `request` message's canonical bytes (the same bytes that were signed). Binds this record to a specific signed request |
+| `contentHash` | string | MUST | SHA-256 hex digest of the final `response` message body |
+| `signatures` | object | MUST | Both agents' signatures over the canonical record |
+
+The `contentHash` proves the record corresponds to a real interaction without revealing the content. The `requestHash` cryptographically binds the completion to a specific signed request — a verifier can ask the provider for the original request message, verify its signature against the requester's DID, and confirm the hash matches. This prevents fabricating completion records without fabricating full signed message exchanges.
+
+**Minimum duration:** Receivers evaluating completion records SHOULD discard records where `completedAt - initiatedAt` is less than 10 seconds. Legitimate tasks require processing time. Fabricated completions between colluding agents can be generated at high frequency but cannot fake elapsed time without spending it.
 
 ### 11.2 Exchange Flow
 
