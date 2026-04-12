@@ -196,7 +196,7 @@ check(typeof pyKey === 'string' && pyKey.startsWith('z'), 'Fetched Python server
 // ── First-contact negotiate ─────────────────────────────────────────────────
 // Node.js signs → Python verifies
 const neg = signMsg({
-  acp: '1.0',
+  arp: '1.0',
   id: `msg_${crypto.randomUUID()}`,
   type: 'negotiate',
   from: ME,
@@ -220,7 +220,7 @@ check(verifyMsg(negD, pyKey), 'Node.js verified Python signature on negotiate re
 // ── Echo request ────────────────────────────────────────────────────────────
 // Node.js signs → Python verifies
 const echoReq = signMsg({
-  acp: '1.0',
+  arp: '1.0',
   id: `msg_${crypto.randomUUID()}`,
   type: 'request',
   from: ME,
@@ -251,7 +251,7 @@ check(verifyMsg(echoD, pyKey), 'Node.js verified Python signature on echo respon
 // float values, nested objects.  If the two JCS implementations diverge
 // on these inputs, the signature will fail.
 const jcsReq = signMsg({
-  acp: '1.0',
+  arp: '1.0',
   id: `msg_${crypto.randomUUID()}`,
   type: 'request',
   from: ME,
@@ -288,7 +288,7 @@ check(verifyMsg(jcsD, pyKey), 'Node.js verified Python signature on Unicode resp
 // ── Tampered signature (negative test) ─────────────────────────────────────
 // Proves the server actually verifies signatures, not just accepting anything.
 const tampered = signMsg({
-  acp: '1.0',
+  arp: '1.0',
   id: `msg_${crypto.randomUUID()}`,
   type: 'request',
   from: ME,
