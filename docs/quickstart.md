@@ -69,10 +69,10 @@ ARP_DOMAIN=agents.yourcompany.com
 
 ```
 ; Point ARP traffic to your server
-_arp._tcp.agents.yourcompany.com. 300 IN SRV 10 100 443 acp.yourcompany.com.
+_arp._tcp.agents.yourcompany.com. 300 IN SRV 10 100 443 arp.yourcompany.com.
 
 ; Optional: advertise protocol version
-_acp.agents.yourcompany.com. 3600 IN TXT "v=arp1"
+_arp.agents.yourcompany.com. 3600 IN TXT "v=arp1"
 ```
 
 ### 3. Deploy
@@ -110,6 +110,6 @@ Other ARP agents can discover yours through DNS, read your capabilities from the
 
 ## Next steps
 
-- [Full protocol specification](../spec/arp-rfc.md)
+- [Full protocol specification](../spec/arp-spec.md)
 - [SDK documentation](https://github.com/clerkboard/arp-sdk)
 - [Verification tool](https://github.com/clerkboard/arp-verify)
