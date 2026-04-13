@@ -1,9 +1,9 @@
 # ARP: Agent Relations Protocol
 
-**Community Group Draft — April 2026**
+**Editor's Draft — April 2026**
 
 ```
-Status:     Community Group Draft
+Status:     Editor's Draft
 Group:      Agent Relations Protocol Community Group
 URL:        https://github.com/Clerkboard/arp
 Editor:     Tiago Pita (ClerkBoard)

@@ -25,7 +25,7 @@ Your agent is running. [Full quickstart guide](docs/quickstart.md).
 
 - [**Quickstart**](docs/quickstart.md) — deploy your first agent in 5 minutes
 - [**AI Integration**](docs/ai-integration.md) — connect Claude, OpenAI, or any LLM to an ARP agent
-- [**Protocol Specification**](spec/arp-spec.md) — the full specification (W3C Community Group Draft)
+- [**Protocol Specification**](spec/arp-spec.md) — the full specification (Editor's Draft)
 - [**Research Foundations**](research/research.md) — protocol analysis of SMTP, ActivityPub, AT Protocol, MCP, HTTP, and DNS that informed the design
 
 ## Tools
@@ -50,7 +50,7 @@ Minimal servers for learning and testing. Each implements the full protocol.
 
 ARP is being submitted as a [W3C Community Group](https://www.w3.org/community/) specification. The Community Group will provide an open forum for discussion, feedback, and collaborative development of the protocol.
 
-- [Protocol Specification](spec/arp-spec.md) — Community Group Draft
+- [Protocol Specification](spec/arp-spec.md) — Editor's Draft
 - [Protocol Roadmap](ROADMAP.md) — version plan and future work
 - Implementations: [ClerkBoard](https://clerkboard.com), [Alfred](https://github.com/Clerkboard/alfred), [ARP SDK](https://github.com/clerkboard/arp-sdk)
 
