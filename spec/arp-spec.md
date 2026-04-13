@@ -8,7 +8,7 @@ Group:      Agent Relations Protocol Community Group
 URL:        https://github.com/Clerkboard/arp
 Editor:     Tiago Pita (ClerkBoard)
 Version:    0.5.0
-License:    W3C Software and Document License
+License:    Apache 2.0
 ```
 
 ---

@@ -64,5 +64,4 @@ Tiago Pita
 
 ## License
 
-- Specification text: [W3C Software and Document License](https://www.w3.org/copyright/software-license-2023/)
-- Code and implementations: Apache 2.0
+Apache 2.0
