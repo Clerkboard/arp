@@ -32,6 +32,17 @@ ARP combines DNS-based discovery, DID-based identity, HTTP transport, typed JSON
 
 This document specifies the protocol. It is deliberately opinionated. Where prior work left choices open, this spec makes them.
 
+### Relationship to other protocols
+
+ARP is additive, not a replacement. It targets a specific niche: signed, federated agent-to-agent messaging across organizational boundaries. It is designed to coexist with, not displace, protocols that solve adjacent problems:
+
+- **MCP (Model Context Protocol)** solves tool access for LLMs within a single trust boundary. ARP solves communication between agents across trust boundaries. An agent can expose MCP tools internally and ARP capabilities externally from the same host; they do not conflict.
+- **A2A (Agent-to-Agent, Google)** is a peer protocol for agent communication. Implementations may run ARP and A2A simultaneously on different endpoints; the protocols do not assume exclusivity.
+- **REST, GraphQL, gRPC, webhooks** remain the right choice for human-facing apps, partner integrations, and server-to-server event notifications. ARP does not attempt to replace any of these.
+- **OAuth, API keys, session auth** remain valid. ARP adds signed-message authentication as an additional modality for agent-originated traffic, not a replacement for existing user-facing auth.
+
+Adoption of ARP therefore imposes no migration cost on existing systems. An implementer adds an ARP surface alongside whatever they already run; nothing existing needs to change or be deprecated.
+
 ---
 
 ## 1. Design Principles
