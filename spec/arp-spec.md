@@ -1,13 +1,13 @@
 # ARP: Agent Relations Protocol
 
-**Editor's Draft — April 2026**
+**Editor's Draft — May 2026**
 
 ```
 Status:     Editor's Draft
 Group:      Agent Relations Protocol Community Group
 URL:        https://github.com/Clerkboard/arp
 Editor:     Tiago Pita (ClerkBoard)
-Version:    0.5.0
+Version:    0.7.0
 License:    Apache 2.0
 ```
 
@@ -17,6 +17,7 @@ License:    Apache 2.0
 
 | Version | Date | Change |
 |---------|------|--------|
+| 0.7.0 | 2026-05-25 | **EXPERIMENTAL** Notifications (Section 21): new `notify` message type, `accept_notifications` relation property, lease-based permission lifecycle, error code `NOTIFICATION_REJECTED`, conventional capabilities `arp:notifications.subscribe`/`arp:notifications.unsubscribe`, Agent Card `notifications` declaration. **EXPERIMENTAL** Settlements (Section 22): signed `SettlementQuote` body shape, `settlement` sub-object on Completion Records, conventional capabilities `arp:settlement.quote`/`arp:settlement.paid`, error codes `SETTLEMENT_REQUIRED`/`QUOTE_EXPIRED`/`QUOTE_INVALID`, two settlement primitives (`prepay`, `postpay`), rail-neutral by design (rail specs are community-maintained, linked from Agent Cards), Agent Card `settlements` declaration. v0.6 collapses into v0.7 — Push Notifications and Settlements ship together. Removed "Billing and payments" line from §17.3 (now defined in §22). |
 | 0.5.0 | 2026-04-13 | **EXPERIMENTAL** Account Linking (Section 12): device-authorization linking flow, account credentials, credential lifecycle (expiry, refresh, revocation), scope enforcement, OAuth delegation alternative. New terminology: Account Link, Account Credential, Linking Ceremony. New error codes: `LINK_EXPIRED`, `LINK_DENIED`, `LINK_REVOKED`, `LINK_REQUIRED`, `SCOPE_DENIED`. Agent Card `accountLinking` declaration. Security considerations for credential replay, phishing, scope escalation. Implementation checklist for account linking. Sections 12–19 renumbered to 13–20. |
 | 0.4.0 | 2026-04-12 | Renamed from ACP to ARP (Agent Relations Protocol). Added Relations (Section 11): lifecycle, termination, dormancy, portability. Added Trust Annotations (Section 10.7). Added Open Capabilities (Section 10.4.1): stateless queries without handshake. Added Outcome Records (Section 13.4): unilateral records for failures and disputes. Enhanced discovery: formalized `agents.txt` (Section 5.3), Agent Directory Manifest with JSON-LD (Section 5.4), JSON-LD `@context` in Agent Cards (Section 7.1). |
 | 0.3.1 | 2026-04-12 | Clarify publicKeyMultibase encoding, formalize negotiate body schema |
@@ -1763,7 +1764,6 @@ Extensions are opt-in. An agent that doesn't understand an extension ignores it.
 
 ### 17.3 What ARP Does NOT Define
 
-- **Billing and payments.** Layer it as an extension.
 - **Global agent search.** Build it as a service on top of crawlable Agent Cards.
 - **Agent lifecycle management.** How you deploy, scale, and monitor agents is your problem.
 - **Delegation chains.** Tracking multi-hop delegation is application-layer logic, not protocol.
@@ -2138,6 +2138,385 @@ The agent's response is also signed. To verify:
 | Missing `firstContact: true` | `FIRST_CONTACT_REQUIRED` (403) | Include in negotiate body for unknown agents |
 | `signature` field included during canonicalization | `AUTH_FAILED` | Remove `signature` before JCS, add it back after |
 | Stale `createdAt` timestamp | `MESSAGE_EXPIRED` | Use current time, not a cached value |
+
+---
+
+## 21. Notifications
+
+> **EXPERIMENTAL.** Notifications are new in v0.7.0.
+
+Fire-and-forget event delivery. Agents subscribe to events from a peer, receive signed notifications without polling, and revoke at any time.
+
+Push-based delivery built on the existing relay, signing, and relations infrastructure. No new transport. No broker. No WebSocket.
+
+### 21.1 The `notify` Message Type
+
+A notification is a one-way signed message:
+
+```json
+{
+  "arp": "1.0",
+  "id": "msg_01HZ4M2P8N…",
+  "type": "notify",
+  "from": "did:web:agents.example.com:order-processor",
+  "to": "did:web:agents.united.com:purchasing",
+  "event": "order.shipped",
+  "notificationId": "notif_01HZ4M2P8N…",
+  "correlationId": "task_01HZ3K9V7N…",
+  "createdAt": "2026-05-25T09:15:00Z",
+  "body": {
+    "orderId": "ord_29847163",
+    "carrier": "DHL",
+    "tracking": "JD0123456789"
+  },
+  "signature": "z3hR9xK7mN…"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | MUST | Always `"notify"` |
+| `event` | string | MUST | Dotted event name (e.g., `order.shipped`) |
+| `notificationId` | string | MUST | Unique per notification; receivers deduplicate on this value |
+| `correlationId` | string | SHOULD | Links the notification to a prior task |
+| `body` | object | MUST | Event-specific payload |
+
+Distinct from `request`: no response is expected, the receiver MAY drop or batch notifications, and `notify` cannot be the subject of a `delegate`. A receiver that doesn't recognize the `event` SHOULD drop the notification without error.
+
+### 21.2 Delivery Semantics
+
+**At-least-once.** Exactly-once delivery across federated agents is impossible (Two Generals Problem). Senders MAY retry a notification if delivery fails. Receivers MUST deduplicate by `notificationId`. A receiver SHOULD remember `notificationId` values for at least 7 days.
+
+**Fire-and-forget.** A `notify` message is delivered with the same machinery as a `request` (Section 9): direct POST to the recipient's inbox, fallback to relay (Section 6) when the inbox is unreachable. Successful delivery is signalled by HTTP `202 Accepted` with no body. Failure to deliver after the relay's retention window expires is not surfaced to the sender — the message is simply lost (at-least-once, not at-most-once).
+
+**No callbacks, no response.** A receiver MUST NOT send a `response` to a `notify`. If acknowledgement matters, model the interaction as a `request` instead.
+
+### 21.3 Permission
+
+Notification permission is a property of the **relation** (Section 11), not a separate subscription object. A relation declares which event types it accepts via `accept_notifications`:
+
+```json
+{
+  "peer": "did:web:agents.example.com:order-processor",
+  "status": "active",
+  "accept_notifications": {
+    "events": ["order.*", "delivery.*", "payment.received"],
+    "validUntil": "2026-06-01T14:30:00Z"
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `events` | array | MUST | Event-type filter list. Supports trailing-wildcard glob (`order.*`) |
+| `validUntil` | string | MUST | ISO 8601 lease expiry |
+
+A relation without `accept_notifications` MUST reject all notifications from that peer with `NOTIFICATION_REJECTED`. Permissions are independent of relation status — notification permission MAY be revoked without terminating the relation.
+
+### 21.4 Permission Lifecycle
+
+**Granting.** A receiver grants permission by sending a `request` with capability `arp:notifications.subscribe`:
+
+```json
+{
+  "type": "request",
+  "capability": "arp:notifications.subscribe",
+  "body": {
+    "events": ["order.*", "payment.received"],
+    "lease": 604800
+  }
+}
+```
+
+`lease` is the requested lease duration in seconds. The peer responds with a `response` containing the granted events and `validUntil`. The granted set MAY be narrower than requested.
+
+**Default lease.** Permissions expire after 7 days unless explicitly extended. Receivers MUST drop expired permissions without notification.
+
+**Renewal.** The receiver renews by sending the same subscribe request before `validUntil`. The peer SHOULD honour renewal automatically for active relations.
+
+**Revocation.** The receiver revokes by sending a `request` with capability `arp:notifications.unsubscribe`. The peer MUST stop sending notifications for the revoked events. In-flight notifications already in the relay queue MAY still be delivered — receivers MUST tolerate brief over-delivery after revocation.
+
+### 21.5 Event Naming
+
+ARP standardizes the envelope, not the events. Event names follow a dotted hierarchical convention: `domain.action` (e.g., `order.shipped`, `payment.received`).
+
+**Protocol-level events.** ARP reserves the following event names for its own use:
+
+| Event | Meaning |
+|-------|---------|
+| `relation.terminated` | The peer has terminated the relation (Section 11.3) |
+| `relation.dormant` | The peer has marked the relation dormant (Section 11.4) |
+| `subscription.expiring` | This notification subscription expires within 24 hours |
+| `key.rotated` | The peer has rotated its DID document keys |
+
+**Application-level events.** All other event names are application-defined. Vertical communities (commerce, support, scheduling) SHOULD coordinate on naming. ARP does not maintain a central event registry.
+
+### 21.6 Agent Card Declaration
+
+Agents that emit notifications MUST declare it in their Agent Card (Section 7):
+
+```json
+{
+  "notifications": {
+    "supported": true,
+    "events": {
+      "order.shipped":    "Fires when an order ships",
+      "order.delivered":  "Fires when an order is marked delivered",
+      "payment.received": "Fires when a payment settles"
+    },
+    "defaultLease": 604800,
+    "maxLease": 7776000
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `supported` | boolean | MUST | Whether this agent emits notifications |
+| `events` | object | SHOULD | Map of event name → human-readable description |
+| `defaultLease` | integer | SHOULD | Default lease duration in seconds (`604800` = 7 days) |
+| `maxLease` | integer | SHOULD | Maximum lease duration in seconds |
+
+### 21.7 Error Codes
+
+Notifications add the following error code to Section 16:
+
+| Code | Meaning |
+|------|---------|
+| `NOTIFICATION_REJECTED` | The receiver has no `accept_notifications` permission for this event, the lease has expired, or the receiver is rate-limiting notifications |
+
+### 21.8 Explicitly Out of Scope
+
+- Fan-out optimization and relay-side delegation for high-volume publishers.
+- Standardized event-type registries beyond the protocol-level events listed in Section 21.5.
+- Notification batching or aggregation.
+- Delivery receipts.
+- SSE-based real-time streaming.
+
+---
+
+## 22. Settlements
+
+> **EXPERIMENTAL.** Settlements are new in v0.7.0.
+
+ARP brackets payment with two signed artifacts — a quote and a receipt — and nothing else. The money moves on the rail (x402, Lightning, cards, SEPA), directly between buyer and seller. ARP never carries rail bearer secrets or account credentials.
+
+This section adds: one Agent Card field, one body shape, one Completion Record sub-object, two conventional capability names, three error codes. Zero new message types.
+
+### 22.1 Design Stance
+
+Two principles govern this section:
+
+1. **ARP standardizes the signed claim, not the rail.** A `SettlementQuote` (Section 22.4) and a settlement-bearing Completion Record (Section 22.5) are the only protocol-level artifacts. Rail-specific behaviour — how money moves, how an on-rail payment carries the `quoteId` back for correlation — lives in community-maintained rail specifications linked from the Agent Card.
+
+2. **ARP does not transport bearer secrets.** Settlement messages carry amount, currency, memo, and a rail reference. They never carry card numbers, client secrets, private keys, or anything else that would compromise a payment if read by an intermediary. Content encryption (Section 8.7) is therefore SHOULD, not MUST, at the ARP layer for settlement-bearing messages.
+
+### 22.2 Settlement Primitives
+
+Two settlement primitives are defined:
+
+| Primitive | Order |
+|-----------|-------|
+| `prepay` | Buyer settles, then provider delivers. Two Completion Records share a `correlationId`: the settlement CR is signed first, the work CR references it |
+| `postpay` | Provider delivers, then buyer settles. Two Completion Records share a `correlationId`: the work CR is signed first, the settlement CR references it |
+
+Atomicity is not enforced — it is made provable. A missing second record is a verifiable unresolved obligation; either party MAY file an Outcome Record (Section 13.4). The protocol provides evidence; reputation and legal layers do enforcement.
+
+Subscriptions and metered billing are not new primitives. They are sequences of `postpay` settlements sharing a correlation key.
+
+### 22.3 Agent Card Declaration
+
+Agents that accept or emit settlements MUST declare it in their Agent Card (Section 7):
+
+```json
+{
+  "settlements": {
+    "supported": true,
+    "rails": [
+      {
+        "name": "x402-base-usdc",
+        "spec": "https://x402.org/spec/1.0",
+        "currencies": ["USDC"]
+      },
+      {
+        "name": "l402-lightning",
+        "spec": "https://docs.lightning.engineering/l402/1.0",
+        "currencies": ["BTC"]
+      },
+      {
+        "name": "stripe-pi",
+        "spec": "https://specs.stripe.com/arp/payments/1.0",
+        "currencies": ["GBP", "EUR", "USD"]
+      }
+    ],
+    "primitives": ["prepay", "postpay"],
+    "settlementWindow": "PT24H",
+    "quoteCapability": "arp:settlement.quote"
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `supported` | boolean | MUST | Whether this agent supports settlements |
+| `rails` | array | MUST | List of supported rails |
+| `rails[].name` | string | MUST | Rail identifier, unique within this agent |
+| `rails[].spec` | string | MUST | URL of the community-maintained rail specification |
+| `rails[].currencies` | array | MUST | Currency codes accepted on this rail |
+| `primitives` | array | MUST | Subset of `["prepay", "postpay"]` |
+| `settlementWindow` | string | SHOULD | ISO 8601 duration for postpay settlement deadline |
+| `quoteCapability` | string | SHOULD | Capability name for requesting a quote (default `arp:settlement.quote`) |
+
+The `spec` URL is the rail handbook — schemas, semantics, error codes. ARP does not author it; the rail community does. ARP only requires that the URL exists and that each rail name is unique within an agent.
+
+### 22.4 SettlementQuote
+
+A `SettlementQuote` is a signed body shape carried inside either:
+
+- a `response` to a quote request (capability `arp:settlement.quote`), or
+- an `error` with code `SETTLEMENT_REQUIRED` (Section 22.10).
+
+```json
+{
+  "amount":     "29.50",
+  "currency":   "GBP",
+  "primitive":  "prepay",
+  "validUntil": "2026-05-25T16:00:00Z",
+  "quoteId":    "qt_01HZ4N3R9P…",
+  "rails": [
+    {
+      "name":   "x402-base-usdc",
+      "target": "https://pay.example.com/x402/qt_01HZ4N3R9P"
+    },
+    {
+      "name":   "stripe-pi",
+      "target": "pi_3PqX…"
+    }
+  ],
+  "memo":     "Order task_01HZ3K9V7N, 50 compute units",
+  "quoteSig": "z3hR9xK7mN…"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `amount` | string | MUST | Decimal amount as a string (avoid float rounding) |
+| `currency` | string | MUST | ISO 4217 code or rail-specific currency (e.g., `USDC`, `BTC`) |
+| `primitive` | string | MUST | `prepay` or `postpay` |
+| `validUntil` | string | MUST | ISO 8601 quote expiry |
+| `quoteId` | string | MUST | Unique quote identifier; used to correlate the on-rail payment back to this quote |
+| `rails` | array | MUST | Per-rail payment targets the buyer can choose from |
+| `rails[].name` | string | MUST | Rail name matching one declared in the seller's Agent Card |
+| `rails[].target` | string | MUST | Rail-defined endpoint or reference (URL, invoice, payment-intent ID, etc.) |
+| `memo` | string | SHOULD | Free-text description of what is being paid for |
+| `quoteSig` | string | MUST | Seller's Ed25519 signature over the canonical SettlementQuote bytes (using the same JCS + Ed25519 algorithm as message signing, Section 8.6) |
+
+`quoteSig` binds the quote to the specific `correlationId` and rail set. Replay protection comes from `validUntil` plus the seller's idempotency window. A SettlementQuote is non-transferable: rail specifications MUST reject settlement attempts where the on-rail payer identity does not match the quote's intended buyer.
+
+### 22.5 Settlement Receipt
+
+A Completion Record (Section 13.1) carrying a `settlement` sub-object **is** the receipt:
+
+```json
+{
+  "type": "completion",
+  "taskId": "task_01HZ3K9V7N…",
+  "capability": "arp:settlement.paid",
+  "agents": {
+    "requester": "did:web:agents.united.com:purchasing",
+    "provider":  "did:web:agents.example.com:order-processor"
+  },
+  "initiatedAt": "2026-05-25T15:30:00Z",
+  "completedAt": "2026-05-25T15:30:31Z",
+  "requestHash": "sha256:7b22…",
+  "contentHash": "sha256:9f86…",
+  "settlement": {
+    "amount":    "29.50",
+    "currency":  "GBP",
+    "primitive": "prepay",
+    "rail":      "x402-base-usdc",
+    "quoteId":   "qt_01HZ4N3R9P…",
+    "railRef":   "0x9f86d08…",
+    "settledAt": "2026-05-25T15:30:30Z"
+  },
+  "signatures": {
+    "requester": "z3hR9xK7mN…",
+    "provider":  "z4kS2yL8pQ…"
+  }
+}
+```
+
+| `settlement` field | Type | Required | Description |
+|--------------------|------|----------|-------------|
+| `amount` | string | MUST | Decimal amount actually settled |
+| `currency` | string | MUST | Currency actually settled |
+| `primitive` | string | MUST | `prepay` or `postpay` |
+| `rail` | string | MUST | Rail name (matches the seller's Agent Card) |
+| `quoteId` | string | MUST | The quote that was settled |
+| `railRef` | string | MUST | Rail-defined reference to the on-rail payment (tx hash, invoice ID, PaymentIntent ID, etc.) |
+| `settledAt` | string | MUST | ISO 8601 timestamp of the on-rail settlement |
+
+`railRef` is a verifiable handle, not a credential. Anyone can verify the on-rail settlement by querying the rail with the reference; ARP messages never carry the secrets needed to authorize a fresh payment.
+
+A settlement-bearing Completion Record is verifiable forever by any third party against the rail. The buyer presents it to their accounting agent; the seller presents it to auditors; either can show a third party the rail reference without revealing rail-internal data.
+
+### 22.6 Capabilities
+
+Two conventional capability names:
+
+| Capability | Used for |
+|------------|----------|
+| `arp:settlement.quote` | Buyer requests a quote. Request body is task-specific (currency preference, line items, etc.). Response body is a `SettlementQuote` |
+| `arp:settlement.paid` | Buyer attests to a completed on-rail payment. Both parties sign the resulting Completion Record carrying the `settlement` sub-object |
+
+Either capability MAY be omitted by a seller that delivers quotes only via `SETTLEMENT_REQUIRED` errors (the buyer attempts the underlying task, gets a quote attached to the error response, then settles).
+
+### 22.7 Atomicity
+
+`prepay` and `postpay` each produce two Completion Records sharing a `correlationId`, signed in a defined order:
+
+- **prepay:** the settlement CR is signed first; the work CR references the settlement CR's `taskId` and `contentHash` in its body.
+- **postpay:** the work CR is signed first; the settlement CR references the work CR's `taskId` and `contentHash` in its body.
+
+If only one CR exists when both should, the relation has an unresolved obligation. Either party MAY file an Outcome Record (Section 13.4) with outcome `failed` and a reason such as `"unpaid"` or `"paid-but-undelivered"`. The protocol does not enforce atomicity — it makes the breach provable.
+
+### 22.8 Spending Authority
+
+Wallet-based payment — where the agent settles from a wallet it controls (Lightning node, smart wallet, EOA, custodial account) — requires nothing from ARP. The wallet's own primitives (session keys, macaroon caveats, ERC-4337 spend limits, custodial daily limits) enforce policy.
+
+Charging a human's standing account at a company is Account Linking (Section 12) territory. The relevant spending-scope vocabulary is reserved for a future revision of Section 12 and is not normative in v0.7.0.
+
+### 22.9 Encryption
+
+Settlement messages carry metadata, not bearer secrets. Content encryption (Section 8.7) is therefore SHOULD, not MUST, at the ARP layer for `SettlementQuote` and `settlement`-bearing messages.
+
+A rail specification MAY raise this to MUST for rails whose `target` field carries a bearer secret (e.g., a card client-secret embedded in the rail handle). When a rail spec sets this requirement, conforming ARP implementations MUST encrypt the corresponding message body.
+
+### 22.10 Error Codes
+
+Settlements add the following error codes to Section 16:
+
+| Code | Meaning |
+|------|---------|
+| `SETTLEMENT_REQUIRED` | The requested operation requires settlement before it will proceed. The error response MUST be returned with HTTP `402` status; the error body MUST contain a `SettlementQuote` |
+| `QUOTE_EXPIRED` | The quote's `validUntil` has passed |
+| `QUOTE_INVALID` | The quote signature does not verify against the seller's DID, the buyer DID does not match, or the rail name is not declared in the seller's Agent Card |
+
+### 22.11 Security Considerations
+
+- **Replay.** A `quoteId` MUST be unique within the seller's idempotency window. Sellers MUST reject settlement attempts referencing a `quoteId` that has already been settled.
+- **Quote substitution.** The settle attempt's `quoteId` is matched against the seller's signed quote. A buyer cannot present a quote intended for someone else; rail-layer settlement is bound to the buyer's identity by the rail specification.
+- **Receipt forgery.** Settlement-bearing Completion Records inherit the anti-fabrication mechanism of Section 13.1 — `requestHash` ties the receipt to a specific signed request, and bilateral signatures bind both parties.
+- **Currency confusion.** Implementations MUST refuse to interpret the `amount` field without a non-empty `currency`. Implementations MUST NOT silently convert currencies; FX is a rail-spec concern.
+- **Prompt-injection-driven settlement.** Spending limits live with the wallet, not the agent. The agent's authority to spend MUST be bounded by wallet-side constraints, not by Agent Card declarations alone.
+
+### 22.12 Explicitly Out of Scope
+
+- **Escrow** — third-party-held settlement with dispute logic. Deferred to a later revision.
+- **FX / currency conversion** — rail-spec concern.
+- **Subscriptions and metered billing as protocol types** — expressed as sequences of `postpay` receipts sharing a correlation key, not new objects.
+- **Multi-party revenue splits** — application-layer composition with multiple `postpay` receipts.
+- **Spending-authority scope vocabulary for Account Linking** — belongs to Section 12; deferred.
 
 ---
 
