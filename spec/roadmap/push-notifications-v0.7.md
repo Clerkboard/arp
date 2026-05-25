@@ -1,4 +1,4 @@
-# ARP Roadmap: Push Notifications (v0.6)
+# ARP Roadmap: Push Notifications (v0.7)
 
 > **Status: PLANNED — Not yet specced. This document captures the design intent for a future version.**
 
@@ -30,7 +30,7 @@ A B2B agent protocol where the only way to learn "your order shipped" is to poll
 - **Standardize the envelope, not the events**. ARP defines the notification structure (notification_id, event type, timestamp, data payload) and a naming convention (`order.shipped`, `payment.received`). Vertical communities define their own event types. ARP only standardizes protocol-level events (`relation.terminated`, `subscription.expiring`).
 - **Notification permission is independent of relation state**. You can revoke notification permission without terminating the relation.
 
-### Explicitly deferred beyond v0.6
+### Explicitly deferred beyond v0.7
 
 - Fan-out optimization / relay delegation for high-volume publishers
 - Standardized event type registries

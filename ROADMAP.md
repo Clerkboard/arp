@@ -2,27 +2,20 @@
 
 ## Version Plan
 
-### v0.4.0 (Current)
-
-Core protocol: discovery, negotiation, messaging, trust lifecycle.
-
-- Relations as first-class primitive (Section 11)
-- Trust Annotations — 4 levels (Section 10.7)
-- Open Capabilities — stateless queries without handshake (Section 10.4.1)
-
-### v0.5.0 (In Progress)
+### v0.5.0 (Current)
 
 Account Linking, Outcome Records, Trust Credential format.
 
-- [Account Linking spec (Section 12)](spec/arp-spec.md) — EXPERIMENTAL
-- Account Linking: 3 methods (Handle Challenge, Device Grant, OAuth Delegation)
+- Account Linking (Section 12) — EXPERIMENTAL
+- 3 linking methods: Handle Challenge, Device Grant, OAuth Delegation
 - Outcome Records for failures and disputes
 
-### v0.6.0 (Planned)
+### v0.7.0 (In Progress)
 
-Push Notifications.
+Push Notifications + Settlements — bundled release.
 
-- [Push Notifications design](spec/roadmap/push-notifications-v0.6.md) — fire-and-forget `notify` message type, notification permissions as a relation property, lease-based expiry, relay-mediated delivery for offline agents.
+- [Push Notifications design](spec/roadmap/push-notifications-v0.7.md) — fire-and-forget `notify` message type, notification permissions as a relation property, lease-based expiry, relay-mediated delivery for offline agents.
+- [Settlements design](spec/roadmap/settlements-v0.7.md) — agent-to-agent payments via signed quote + receipt; rail-neutral (x402, Lightning, cards); reuses Account Linking for spend authority.
 
 ### v1.0.0 (Target)
 
